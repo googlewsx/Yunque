@@ -144,9 +144,6 @@ function 获取机器人简介($qq_number, $appid) {
         $commands = $api_response['data']['commands'] ?? [];
         
         $avatar_url = $robot_data['robot_avatar'] ?? '';
-        if ($avatar_url && strpos($avatar_url, 'myqcloud.com') !== false) {
-            $avatar_url .= (strpos($avatar_url, '?') !== false ? '&' : '?') . 'imageMogr2/format/png';
-        }
         
         return [
             "code" => 200,

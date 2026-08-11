@@ -131,21 +131,6 @@ function 消息预览($data) {
     return mb_substr($content, 0, 80, 'UTF-8');
 }
 
-/** 读取 COS 存储桶配置（config.json「存储桶」），缺项回退参考库默认 */
-function 云雀_COS配置() {
-    $cfgFile = dirname(dirname(__DIR__)) . '/config.json';
-    $cfg = json_decode(@file_get_contents($cfgFile), true);
-    $cos = $cfg['存储桶'] ?? [];
-    return [
-        'secret_id'  => (string)($cos['secret_id'] ?? getenv('COS_SECRET_ID') ?: ''),
-        'secret_key' => (string)($cos['secret_key'] ?? getenv('COS_SECRET_KEY') ?: ''),
-        'bucket'     => (string)($cos['bucket'] ?? 'sgame-data-service-1252931805'),
-        'region'     => (string)($cos['region'] ?? 'ap-nanjing'),
-        'prefix'     => (string)($cos['prefix'] ?? 'SnsShare/'),
-        'cdn_domain' => (string)($cos['cdn_domain'] ?? ''),
-    ];
-}
-
 /** 宽容提取消息里的图片链接：attachments 各字段 + 文本中的图片链接 */
 function 云雀_提取图片($attachments, $content = '') {
     $urls = [];
@@ -1350,72 +1335,6 @@ switch ($type) {
         }
         break;
     
-    case "cos_upload":
-        // 本地图片上传到 COS 存储桶，返回可直接发送的链接
-        $data = trim((string)($_POST['data'] ?? $_REQUEST['data'] ?? ''));
-        $name = trim((string)($_POST['name'] ?? $_REQUEST['name'] ?? ''));
-        if ($data === '') {
-            echo json_encode(["code" => 400, "msg" => "缺少图片数据"], JSON_UNESCAPED_UNICODE);
-            exit;
-        }
-        if (strpos($data, 'data:') === 0) {
-            $data = (string)preg_replace('#^data:[^;]*;base64,#i', '', $data);
-        }
-        $bin = base64_decode($data, true);
-        if ($bin === false || $bin === '') {
-            echo json_encode(["code" => 400, "msg" => "图片数据无效"], JSON_UNESCAPED_UNICODE);
-            exit;
-        }
-        $ext = 'jpg';
-        if (substr($bin, 0, 8) === "\x89PNG\r\n\x1a\n") $ext = 'png';
-        elseif (substr($bin, 0, 2) === "\xFF\xD8") $ext = 'jpg';
-        elseif (substr($bin, 0, 4) === 'GIF8') $ext = 'gif';
-        elseif (substr($bin, 0, 4) === 'RIFF' && substr($bin, 8, 4) === 'WEBP') $ext = 'webp';
-        elseif ($name !== '' && preg_match('/\.(png|jpe?g|gif|webp)$/i', $name)) $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
-        if ($ext === 'jpeg') $ext = 'jpg';
-
-        $tmp = tempnam(sys_get_temp_dir(), 'cos');
-        if ($tmp === false) {
-            echo json_encode(["code" => 500, "msg" => "无法创建临时文件"], JSON_UNESCAPED_UNICODE);
-            exit;
-        }
-        file_put_contents($tmp, $bin);
-
-        $cosFile = __DIR__ . '/COSUploader.php';
-        if (!is_file($cosFile)) {
-            @unlink($tmp);
-            echo json_encode(["code" => 500, "msg" => "COS 上传组件缺失"], JSON_UNESCAPED_UNICODE);
-            exit;
-        }
-        require_once $cosFile;
-
-        try {
-            $cos = 云雀_COS配置();
-            $uploader = new COSUploader($cos['secret_id'], $cos['secret_key'], $cos['bucket'], $cos['region']);
-            $targetFileName = 'chat/' . date('Ymd') . '/' . date('His') . '_' . substr(md5($bin), 0, 8) . '.' . $ext;
-            $res = $uploader->uploadToCOS($tmp, $targetFileName, $name);
-            if (!$res['success']) {
-                @unlink($tmp);
-                echo json_encode(["code" => 500, "msg" => "上传存储桶失败"], JSON_UNESCAPED_UNICODE);
-                exit;
-            }
-            $url = $res['url'];
-            if ($cos['cdn_domain'] !== '') {
-                $php_domain = $cos['bucket'] . '.cos.' . $cos['region'] . '.myqcloud.com';
-                $url = str_replace($php_domain, $cos['cdn_domain'], $url);
-            }
-            @unlink($tmp);
-            echo json_encode([
-                "code" => 200,
-                "url" => $url,
-                "filename" => $targetFileName
-            ], JSON_UNESCAPED_UNICODE);
-        } catch (Throwable $e) {
-            @unlink($tmp);
-            echo json_encode(["code" => 500, "msg" => "上传异常: " . $e->getMessage()], JSON_UNESCAPED_UNICODE);
-        }
-        break;
-
     case "all_users":
         // 遍历当天聊天记录，返回去重后的用户列表（用于「从消息里选主人」）
         if (!is_file($path)) {
