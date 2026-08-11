@@ -2,6 +2,25 @@
 // 聊天记录API接口
 header('Content-Type: application/json');
 
+// mbstring 缺失时的兼容垫片
+if (!function_exists('mb_substr')) {
+    function mb_substr($str, $start, $length = null, $encoding = 'UTF-8') {
+        if (function_exists('iconv_substr')) {
+            if ($length === null) $length = function_exists('iconv_strlen') ? iconv_strlen($str, $encoding) : strlen($str);
+            return iconv_substr($str, $start, $length, $encoding);
+        }
+        $chars = preg_split('//u', (string)$str, -1, PREG_SPLIT_NO_EMPTY);
+        if (!is_array($chars)) return '';
+        $chars = array_slice($chars, $start, $length === null ? null : $length);
+        return implode('', $chars);
+    }
+}
+if (!function_exists('mb_strtolower')) {
+    function mb_strtolower($str, $encoding = 'UTF-8') {
+        return strtolower((string)$str);
+    }
+}
+
 $type = $_REQUEST["type"] ?? "";
 $appid = $_REQUEST["appid"] ?? "";
 $name = $_REQUEST["name"] ?? date("Y-m-d").".log";
@@ -151,6 +170,83 @@ function 云雀_提取图片($attachments, $content = '') {
         if (!in_array($u, $urls, true)) $urls[] = $u;
     }
     return $urls;
+}
+
+/**
+ * 后台群管理操作：载入框架运行环境并定义必要常量。
+ * 返回调用前的原始工作目录（调用方负责 chdir 恢复）。
+ */
+function 云雀_后台框架($appid) {
+    $frameworkRoot = dirname(dirname(__DIR__));
+    $originalDir = getcwd();
+    chdir($frameworkRoot);
+    require_once $frameworkRoot . "/function.php";
+    require_once $frameworkRoot . "/bot.php";
+    if (!defined('appid')) define('appid', $appid);
+    $mainJsonPath = $frameworkRoot . '/main.json';
+    if (is_file($mainJsonPath)) {
+        $mainData = json_decode(@file_get_contents($mainJsonPath), true);
+        if (is_array($mainData) && isset($mainData[$appid])) {
+            if (!defined('secret') && isset($mainData[$appid]['secret'])) define('secret', $mainData[$appid]['secret']);
+            if (!defined('type') && isset($mainData[$appid]['type'])) define('type', $mainData[$appid]['type']);
+        }
+    }
+    return $originalDir;
+}
+
+/** 解析群管理接口返回中的错误信息 */
+function 云雀_操作错误($result) {
+    $decoded = json_decode($result, true);
+    if (is_array($decoded) && isset($decoded['code']) && $decoded['code'] != 0) {
+        return $decoded['message'] ?? ($decoded['msg'] ?? '操作失败');
+    }
+    return '';
+}
+
+/** 群名缓存文件路径（按机器人分开缓存） */
+function 云雀_群名缓存文件($appid) {
+    $dir = dirname(__DIR__) . "/data";
+    if (!is_dir($dir)) @mkdir($dir, 0755, true);
+    return $dir . "/group_names_{$appid}.json";
+}
+
+/** 读取群名缓存 map */
+function 云雀_读群名缓存($appid) {
+    $file = 云雀_群名缓存文件($appid);
+    $map = json_decode(@file_get_contents($file), true);
+    return is_array($map) ? $map : [];
+}
+
+/** 写入群名缓存 map */
+function 云雀_写群名缓存($appid, $map) {
+    @file_put_contents(云雀_群名缓存文件($appid), json_encode($map, JSON_UNESCAPED_UNICODE));
+}
+
+/**
+ * 获取群名称：优先读缓存，未命中则调用官方群信息接口并写入缓存。
+ * 接口无权（如错误码 11253 仅白名单机器人可用）或失败时返回空串。
+ */
+function 云雀_获取群名($appid, $group) {
+    if ($group === '') return '';
+    $map = 云雀_读群名缓存($appid);
+    if (isset($map[$group]) && $map[$group] !== '') return $map[$group];
+    static $loaded = false;
+    if (!$loaded) {
+        云雀_后台框架($appid);
+        $loaded = true;
+    }
+    $name = '';
+    try {
+        $g = 群信息($group);
+        $name = is_array($g) ? (string)($g['group_name'] ?? '') : '';
+    } catch (Throwable $e) {
+        $name = '';
+    }
+    if ($name !== '') {
+        $map[$group] = $name;
+        云雀_写群名缓存($appid, $map);
+    }
+    return $name;
 }
 
 switch ($type) {
@@ -358,6 +454,13 @@ switch ($type) {
         usort($privatesList, function($a, $b) {
             return strtotime($b["last_message_time"]) - strtotime($a["last_message_time"]);
         });
+        
+        // 填充群名称（缓存命中则直接显示，未命中返回空串由前端异步补齐）
+        $groupNameMap = 云雀_读群名缓存($appid);
+        foreach ($groupsList as $i => $g) {
+            $gid = $g["id"];
+            $groupsList[$i]["name"] = isset($groupNameMap[$gid]) ? $groupNameMap[$gid] : "";
+        }
         
         echo json_encode([
             "code" => 200,
@@ -1857,13 +1960,83 @@ switch ($type) {
 
         if ($action === 'delete') {
             $id = $_REQUEST["id"] ?? "";
-            $templates = array_values(array_filter($templates, fn($t) => ($t['id'] ?? '') !== $id));
+            $templates = array_values(array_filter($templates, function($t) use ($id) { return ($t['id'] ?? '') !== $id; }));
             file_put_contents($tplFile, json_encode($templates, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
             echo json_encode(["code" => 200, "msg" => "模板已删除"], JSON_UNESCAPED_UNICODE);
             exit;
         }
 
         echo json_encode(["code" => 200, "templates" => array_values($templates)], JSON_UNESCAPED_UNICODE);
+        break;
+
+    /* ---------------- 群管理：撤回 / 禁言 ---------------- */
+
+    case "group_name":
+        // 获取单个群的名称（调用官方群信息接口并缓存）
+        $groupId = $_REQUEST["group_id"] ?? "";
+        if (empty($appid) || empty($groupId)) {
+            echo json_encode(["code" => 400, "msg" => "缺少必要参数"], JSON_UNESCAPED_UNICODE);
+            break;
+        }
+        $name = 云雀_获取群名($appid, $groupId);
+        if ($name === '') {
+            echo json_encode(["code" => 404, "name" => "", "msg" => "获取群名失败，该接口可能仅白名单机器人可用"], JSON_UNESCAPED_UNICODE);
+        } else {
+            echo json_encode(["code" => 200, "name" => $name, "msg" => "获取成功"], JSON_UNESCAPED_UNICODE);
+        }
+        break;
+
+    case "revoke":
+        // 撤回机器人主动发出的消息
+        $chatType = $_REQUEST["chat_type"] ?? "";
+        $chatId   = $_REQUEST["chat_id"] ?? "";
+        $msgId    = $_REQUEST["msg_id"] ?? "";
+        if (empty($appid) || empty($chatType) || empty($chatId) || empty($msgId)) {
+            echo json_encode(["code" => 400, "msg" => "缺少必要参数"], JSON_UNESCAPED_UNICODE);
+            break;
+        }
+        $originalDir = 云雀_后台框架($appid);
+        if (!defined('消息来源')) define('消息来源', $chatType === 'group' ? '群聊' : '私聊');
+        if (!defined('来源')) define('来源', $chatId);
+        if (!defined('消息ID')) define('消息ID', $msgId);
+        try {
+            $err = 云雀_操作错误(撤回($msgId));
+            if ($err) {
+                chdir($originalDir);
+                echo json_encode(["code" => 500, "msg" => "撤回失败：" . $err], JSON_UNESCAPED_UNICODE);
+            } else {
+                chdir($originalDir);
+                echo json_encode(["code" => 200, "msg" => "撤回成功"], JSON_UNESCAPED_UNICODE);
+            }
+        } catch (Throwable $e) {
+            chdir($originalDir);
+            echo json_encode(["code" => 500, "msg" => "撤回异常：" . $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
+        break;
+
+    case "mute":
+        // 群禁言指定成员
+        $groupId = $_REQUEST["group_id"] ?? "";
+        $userId  = $_REQUEST["user_id"] ?? "";
+        $seconds = max(0, (int)($_REQUEST["seconds"] ?? 600));
+        if (empty($appid) || empty($groupId) || empty($userId)) {
+            echo json_encode(["code" => 400, "msg" => "缺少必要参数"], JSON_UNESCAPED_UNICODE);
+            break;
+        }
+        $originalDir = 云雀_后台框架($appid);
+        try {
+            $err = 云雀_操作错误($seconds > 0 ? 群禁言($userId, $seconds, $groupId) : 解除群禁言($userId, $groupId));
+            if ($err) {
+                chdir($originalDir);
+                echo json_encode(["code" => 500, "msg" => "操作失败：" . $err], JSON_UNESCAPED_UNICODE);
+            } else {
+                chdir($originalDir);
+                echo json_encode(["code" => 200, "msg" => $seconds > 0 ? "禁言成功" : "已解除禁言"], JSON_UNESCAPED_UNICODE);
+            }
+        } catch (Throwable $e) {
+            chdir($originalDir);
+            echo json_encode(["code" => 500, "msg" => "操作异常：" . $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
         break;
 
     default:

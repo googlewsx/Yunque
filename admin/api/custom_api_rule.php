@@ -52,7 +52,7 @@ switch($type){
         echo json_encode(['code'=>200,'msg'=>'保存成功','id'=>$item['id']], JSON_UNESCAPED_UNICODE); break;
     case 'delete':
         $id = $_POST['id'] ?? $_REQUEST['id'] ?? '';
-        $list = array_values(array_filter(readRules($dataFile), fn($x)=>($x['id']??'')!==$id));
+        $list = array_values(array_filter(readRules($dataFile), function($x) use ($id) { return ($x['id'] ?? '') !== $id; }));
         writeRules($dataFile,$list);
         echo json_encode(['code'=>200,'msg'=>'删除成功'], JSON_UNESCAPED_UNICODE); break;
     default:

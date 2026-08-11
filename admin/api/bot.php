@@ -17,7 +17,9 @@ function 云雀_默认设置() {
         "排除机器人" => true,
         "自动去艾特" => true,
         "处理自己消息" => false,
-        "仅群主可用" => false
+        "仅群主可用" => false,
+        "屏蔽其他机器人" => false,
+        "自动去开头艾特" => true
     ];
 }
 
@@ -108,6 +110,91 @@ switch ($type) {
             ];
         }
         echo json_encode(["code" => 200, "list" => $list], JSON_UNESCAPED_UNICODE);
+        break;
+
+    case "users":
+        // 遍历该机器人全部日志，返回去重用户列表（用于「从日志选主人」）
+        $appid = trim($_REQUEST["appid"] ?? "");
+        $users = [];
+        if ($appid !== "") {
+            $files = glob(dirname(__DIR__, 2) . "/Log/{$appid}/*.log");
+            foreach ($files as $file) {
+                $lines = @file($file, FILE_IGNORE_NEW_LINES);
+                if (!is_array($lines)) continue;
+                foreach ($lines as $line) {
+                    $line = trim($line);
+                    if ($line === '' || $line === '重复数据') continue;
+                    if (!preg_match('/^\[([^\]]+)\]\s*(.*)$/', $line, $m)) continue;
+                    try {
+                        $d = json_decode($m[2], true);
+                        if (!is_array($d)) continue;
+                        $ev = $d['t'] ?? '';
+                        $uid = '';
+                        $uname = '';
+                        if ($ev === 'GROUP_AT_MESSAGE_CREATE' || $ev === 'GROUP_MESSAGE_CREATE') {
+                            $uid = $d['d']['author']['id'] ?? $d['d']['author']['member_openid'] ?? '';
+                            $uname = $d['d']['author']['username'] ?? $d['d']['member']['nick'] ?? '';
+                        } elseif ($ev === 'C2C_MESSAGE_CREATE') {
+                            $uid = $d['d']['author']['id'] ?? $d['d']['author']['user_openid'] ?? '';
+                            $uname = $d['d']['author']['username'] ?? $d['d']['member']['nick'] ?? '';
+                        } elseif ($ev === 'GROUP_ADD_ROBOT' || $ev === 'GROUP_DEL_ROBOT') {
+                            $uid = $d['d']['op_member_openid'] ?? '';
+                            $uname = $d['d']['op_member']['nick'] ?? '';
+                        }
+                        if ($uid === '') continue;
+                        if (!isset($users[$uid])) {
+                            $users[$uid] = ['id' => $uid, 'username' => '', 'last_time' => '', 'scenes' => []];
+                        }
+                        if ($uname !== '' && $users[$uid]['username'] === '') $users[$uid]['username'] = $uname;
+                        if (strcmp($m[1], $users[$uid]['last_time']) > 0) $users[$uid]['last_time'] = $m[1];
+                    } catch (Throwable $e) {
+                        continue;
+                    }
+                }
+            }
+        }
+        $usersList = array_values($users);
+        usort($usersList, function ($a, $b) {
+            return strcmp($b['last_time'], $a['last_time']);
+        });
+        echo json_encode(["code" => 200, "users" => $usersList], JSON_UNESCAPED_UNICODE);
+        break;
+
+    case "groups":
+        // 遍历该机器人全部日志，返回去重群列表（用于「插件作用域从日志选择」）
+        $appid = trim($_REQUEST["appid"] ?? "");
+        $groups = [];
+        if ($appid !== "") {
+            $files = glob(dirname(__DIR__, 2) . "/Log/{$appid}/*.log");
+            foreach ($files as $file) {
+                $lines = @file($file, FILE_IGNORE_NEW_LINES);
+                if (!is_array($lines)) continue;
+                foreach ($lines as $line) {
+                    $line = trim($line);
+                    if ($line === '' || $line === '重复数据') continue;
+                    if (!preg_match('/^\[([^\]]+)\]\s*(.*)$/', $line, $m)) continue;
+                    try {
+                        $d = json_decode($m[2], true);
+                        if (!is_array($d)) continue;
+                        $ev = $d['t'] ?? '';
+                        $gid = $d['d']['group_openid'] ?? $d['d']['group_id'] ?? '';
+                        if ($gid === '') continue;
+                        if (!in_array($ev, ['GROUP_AT_MESSAGE_CREATE', 'GROUP_MESSAGE_CREATE', 'GROUP_ADD_ROBOT', 'GROUP_DEL_ROBOT'], true)) continue;
+                        if (!isset($groups[$gid])) {
+                            $groups[$gid] = ['id' => $gid, 'last_time' => ''];
+                        }
+                        if (strcmp($m[1], $groups[$gid]['last_time']) > 0) $groups[$gid]['last_time'] = $m[1];
+                    } catch (Throwable $e) {
+                        continue;
+                    }
+                }
+            }
+        }
+        $groupsList = array_values($groups);
+        usort($groupsList, function ($a, $b) {
+            return strcmp($b['last_time'], $a['last_time']);
+        });
+        echo json_encode(["code" => 200, "groups" => $groupsList], JSON_UNESCAPED_UNICODE);
         break;
 
     default:

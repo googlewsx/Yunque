@@ -9,7 +9,12 @@ $file = dirname(__DIR__, 2) . "/config.json";
 $config = json_decode(@file_get_contents($file), true);
 if (!is_array($config)) $config = [];
 $admins = $config["admins"] ?? [];
-if (!is_array($admins)) $admins = [];
+if (!is_array($admins) || count($admins) === 0) {
+    // 兼容旧版 config.json：顶层 admin / password 作为唯一管理员
+    $oldName = $config["admin"] ?? "";
+    $oldPassword = $config["password"] ?? "";
+    $admins = ($oldName === "") ? [] : [["name" => $oldName, "password" => $oldPassword, "role" => "管理员", "note" => "旧版配置"]];
+}
 
 $type = $_POST["type"] ?? $_REQUEST["type"] ?? "";
 
@@ -22,6 +27,7 @@ function 云雀_查找管理员(array $admins, string $name) {
 
 function 云雀_保存配置($file, $config, $admins) {
     $config["admins"] = $admins;
+    unset($config["admin"], $config["password"]);
     file_put_contents($file, json_encode($config, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
 }
 

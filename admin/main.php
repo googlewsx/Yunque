@@ -720,6 +720,38 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.main-content::-webkit-scrollbar
 
     <div id="notification" class="notification"></div>
 
+    <!-- 机器人设置模态框：开关 + 主人 -->
+    <div class="modal" id="settingsModal">
+        <div class="modal-content" style="max-width:560px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-sliders-h"></i> 机器人设置</h3>
+                <button class="close-btn" data-close="settingsModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group"><label>机器人 AppID</label><input type="text" class="form-control" id="setAppid" readonly></div>
+                <div class="form-group">
+                    <label>主人（可从日志中遍历选择，或手动输入 openid）</label>
+                    <div style="display:flex;gap:8px;">
+                        <input type="text" class="form-control" id="ownerId" placeholder="主人 openid">
+                        <button class="btn btn-secondary btn-sm" id="clearOwnerBtn" type="button">清空</button>
+                    </div>
+                    <select class="form-select" id="ownerSelect" style="margin-top:8px;">
+                        <option value="">— 从日志选择主人 —</option>
+                    </select>
+                    <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">群聊/私聊用户从该机器人的日志中自动汇总，按最近活跃排序。</div>
+                </div>
+                <div class="form-group">
+                    <label>功能开关</label>
+                    <div id="switchList"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-close="settingsModal">取消</button>
+                <button class="btn btn-primary" id="saveSettingsBtn"><i class="fas fa-save"></i> 保存设置</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let currentBots = [];
         let deleteTargetAppid = null;
@@ -816,6 +848,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.main-content::-webkit-scrollbar
                         <div class="stat-item"><div class="num">${bot.data?.加群 || 0}</div><div class="label">加群</div></div>
                     </div>
                     <div class="bot-actions">
+                        <button class="btn btn-secondary btn-sm bot-settings" data-appid="${escapeHtml(bot.appid)}"><i class="fas fa-sliders-h"></i> 设置</button>
                         <a href="plugin.php?appid=${encodeURIComponent(bot.appid)}" class="btn btn-secondary btn-sm"><i class="fas fa-puzzle-piece"></i> 插件</a>
                         <a href="log.php?appid=${encodeURIComponent(bot.appid)}" class="btn btn-secondary btn-sm"><i class="fas fa-chart-line"></i> 日志</a>
                         <a href="chat.php?appid=${encodeURIComponent(bot.appid)}" class="btn btn-secondary btn-sm"><i class="fas fa-comments"></i> 聊天</a>
@@ -824,6 +857,13 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.main-content::-webkit-scrollbar
                 </div>
             `).join('');
 
+            // 绑定设置按钮事件
+            document.querySelectorAll('.bot-settings').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    openSettingsModal(btn.dataset.appid);
+                });
+            });
             // 绑定删除按钮事件
             document.querySelectorAll('.delete-bot').forEach(btn => {
                 btn.addEventListener('click', (e) => {
@@ -851,6 +891,97 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.main-content::-webkit-scrollbar
                 showMsg('网络错误', false);
             }
             deleteTargetAppid = null;
+        });
+
+        /* ---------- 机器人设置（开关 + 主人） ---------- */
+        const SETTING_SWITCHES = [
+            ['群非艾特', '接收群内非艾特消息'],
+            ['排除机器人', '忽略所有机器人账号消息'],
+            ['自动去艾特', '去掉消息中的艾特标记'],
+            ['处理自己消息', '处理机器人自己发出的消息'],
+            ['仅群主可用', '仅群主可触发插件'],
+            ['屏蔽其他机器人', '忽略其他机器人消息（不影响自己）'],
+            ['自动去开头艾特', '非艾特消息自动去掉开头艾特机器人+空格'],
+        ];
+        let settingsAppid = '';
+        let settingsUsers = [];
+        let settingsOwnerName = '';
+
+        function renderSwitchList(settings) {
+            const box = document.getElementById('switchList');
+            box.innerHTML = SETTING_SWITCHES.map(([key, desc]) => {
+                const on = settings[key] !== false;
+                return `<label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;cursor:pointer;background:white;">
+                    <input type="checkbox" data-key="${key}" ${on ? 'checked' : ''} style="accent-color:var(--primary);">
+                    <span style="flex:1;font-size:13px;"><span style="font-weight:500;color:var(--text-main);">${escapeHtml(key)}</span><br><span style="font-size:11px;color:var(--text-muted);">${escapeHtml(desc)}</span></span>
+                </label>`;
+            }).join('');
+        }
+
+        async function openSettingsModal(appid) {
+            settingsAppid = appid;
+            settingsOwnerName = '';
+            document.getElementById('setAppid').value = appid;
+            const ownerId = document.getElementById('ownerId');
+            const ownerSelect = document.getElementById('ownerSelect');
+            ownerId.value = '';
+            ownerSelect.innerHTML = '<option value="">— 从日志选择主人 —</option>';
+            ownerSelect.disabled = true;
+
+            // 读取当前机器人配置（含默认开关、当前主人）
+            let settings = {};
+            try {
+                const res = await fetch('api/bot.php?type=list');
+                const data = await res.json();
+                const bot = (data.list || []).find(b => b.appid === appid);
+                if (bot) {
+                    settings = bot.settings || {};
+                    const owner = bot.主人 || {};
+                    if (owner.id) { ownerId.value = owner.id; settingsOwnerName = owner.name || ''; }
+                }
+            } catch (e) {}
+            renderSwitchList(settings);
+
+            // 从日志加载用户列表（用于选主人）
+            try {
+                const u = await fetch(`api/bot.php?type=users&appid=${encodeURIComponent(appid)}`);
+                const ud = await u.json();
+                settingsUsers = (ud.code === 200 && Array.isArray(ud.users)) ? ud.users : [];
+                ownerSelect.innerHTML = '<option value="">— 从日志选择主人 —</option>' +
+                    settingsUsers.map(x => `<option value="${escapeHtml(x.id)}">${escapeHtml(x.username || x.id)}${x.id !== (x.username || '') ? ' · ' + escapeHtml(x.id.slice(-6)) : ''} · ${escapeHtml(x.last_time || '')}</option>`).join('');
+                ownerSelect.disabled = !settingsUsers.length;
+            } catch (e) { ownerSelect.disabled = true; }
+
+            document.getElementById('settingsModal').style.display = 'flex';
+        }
+
+        document.getElementById('ownerSelect').addEventListener('change', (e) => {
+            const v = e.target.value;
+            if (!v) return;
+            const user = settingsUsers.find(x => x.id === v);
+            if (user) { settingsOwnerName = user.username || ''; }
+            document.getElementById('ownerId').value = v;
+        });
+
+        document.getElementById('clearOwnerBtn').addEventListener('click', () => {
+            document.getElementById('ownerId').value = '';
+            settingsOwnerName = '';
+        });
+
+        document.getElementById('saveSettingsBtn').addEventListener('click', async () => {
+            if (!settingsAppid) return;
+            const settings = {};
+            document.querySelectorAll('#switchList input[type=checkbox]').forEach(cb => {
+                settings[cb.dataset.key] = cb.checked;
+            });
+            const ownerIdVal = document.getElementById('ownerId').value.trim();
+            const owner = { id: ownerIdVal, name: settingsOwnerName };
+            try {
+                const res = await fetch(`api/bot.php?type=update&appid=${encodeURIComponent(settingsAppid)}&settings=${encodeURIComponent(JSON.stringify(settings))}&主人=${encodeURIComponent(JSON.stringify(owner))}`);
+                const data = await res.json();
+                if (data.code === 200) { showMsg('设置已保存', true); closeModal('settingsModal'); }
+                else showMsg(data.msg || '保存失败', false);
+            } catch (err) { showMsg('保存失败', false); }
         });
 
         // 添加机器人

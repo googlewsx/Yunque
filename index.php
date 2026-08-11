@@ -252,25 +252,52 @@ function Main($raw)
         return;
     }
 
+    // 机器人自身 ID（缓存 1 小时，首次会请求一次官方接口）
+    $me = 自身ID();
+
     // 排除机器人：开启时忽略机器人账号（含机器人与他人对话）
     if (机器人设置(appid, "排除机器人", true) && !empty($d["author"]["bot"])) {
         return;
     }
 
+    // 屏蔽其他机器人：开启时忽略其他机器人的消息，不影响机器人自己
+    if (机器人设置(appid, "屏蔽其他机器人", false) && !empty($d["author"]["bot"])) {
+        $authorId = $d["author"]["id"] ?? $d["author"]["member_openid"] ?? '';
+        if ($me === '' || $authorId !== $me) {
+            return;
+        }
+    }
+
     // 处理自己消息：关闭时不处理机器人自己发出的消息
     if (!机器人设置(appid, "处理自己消息", false)) {
-        $me = 自身ID();
         if ($me !== '' && $me === 常量('用户')) {
             return;
         }
     }
 
-    // 消息文本（自动去艾特）
+    // 消息文本
     $content = (string)($d["content"] ?? "");
+
+    // 非艾特消息：自动排除开头的“艾特机器人+空格”，不影响艾特其他非机器人的人
+    if ($event === "GROUP_MESSAGE_CREATE" && 机器人设置(appid, "群非艾特", true) && 机器人设置(appid, "自动去开头艾特", true)) {
+        if ($me !== '' && preg_match('/^<@' . preg_quote($me, '/') . '>\s*/u', $content, $m)) {
+            $content = substr($content, strlen($m[0]));
+        }
+    }
+
+    // 自动去艾特：去掉所有艾特标记（原有行为）
     if (机器人设置(appid, "自动去艾特", true)) {
         $content = (string)preg_replace('/<@[^>]*>/u', '', $content);
     }
     define("消息", trim($content, " /"));
+
+    // 向插件提供主人 ID 与机器人自身 ID
+    if (!defined('主人ID')) {
+        define("主人ID", 主人ID());
+    }
+    if (!defined('机器人ID')) {
+        define("机器人ID", $me);
+    }
 
     // 身份判定：仅群聊场景、且开启“仅群主可用”时才实时查询，避免无谓的接口调用
     if (常量('消息来源') === "群聊" && 机器人设置(appid, "仅群主可用", false)) {

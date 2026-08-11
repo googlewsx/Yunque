@@ -25,7 +25,7 @@ $type = $_REQUEST["type"] ?? "";
                     "secret" => $secret,
                     "type" => $environment
                 ];
-                $msg = BOT信息($appid,$secret);
+                $msg = BOT信息($appid,$secret,$environment);
                 $fh["name"] = $msg["username"];
                 $fh["avatar"] = $msg["avatar"];
                 $fh["data"] = 数据统计($appid);
@@ -97,7 +97,7 @@ $添加 = 0;
     }
 }
 
-function BOT信息($appid,$secret) {
+function BOT信息($appid,$secret,$type = "正式") {
     $url = "https://bots.qq.com/app/getAppAccessToken";
     $json = json_encode(["appId" => (string)$appid, "clientSecret" => $secret]);
     $options = [
@@ -112,17 +112,28 @@ function BOT信息($appid,$secret) {
     $response = file_get_contents($url, false, $context);
     $fw = json_decode($response, true);
     $Access = $fw["access_token"];
-    $url = "https://sandbox.api.sgroup.qq.com/users/@me";
+    $hosts = ["正式" => "https://api.bot.qq.com", "沙箱" => "https://sandbox.api.bot.qq.com"];
+    $fallbacks = ["正式" => "https://api.sgroup.qq.com", "沙箱" => "https://sandbox.api.sgroup.qq.com"];
+    $host = isset($hosts[$type]) ? $hosts[$type] : $hosts["正式"];
+    $oldHost = isset($fallbacks[$type]) ? $fallbacks[$type] : $fallbacks["正式"];
     $options = [
         'http' => [
             'method' => 'GET',
             'header' => "Authorization: QQBot ".$Access."\r\n" .
                         "Content-Type: application/json\r\n",
-            'ignore_errors' => true
+            'ignore_errors' => true,
+            'timeout' => 10
         ]
     ];
     
     $context = stream_context_create($options);
-    $response = file_get_contents($url, false, $context);
-    return json_decode($response, true);
+    $response = @file_get_contents($host . "/users/@me", false, $context);
+    $decoded = json_decode($response, true);
+    if (!is_array($decoded) || isset($decoded['code']) && $decoded['code'] == -1) {
+        // 新域名不可达时回退旧域名
+        $response2 = @file_get_contents($oldHost . "/users/@me", false, $context);
+        $decoded2 = json_decode($response2, true);
+        if (is_array($decoded2)) return $decoded2;
+    }
+    return is_array($decoded) ? $decoded : [];
 }

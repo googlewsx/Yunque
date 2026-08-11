@@ -77,7 +77,7 @@ try {
         case 'delete':
             $id = $_POST['id'] ?? $_REQUEST['id'] ?? '';
             if (!$id) { echo json_encode(['code'=>400,'msg'=>'缺少id'], JSON_UNESCAPED_UNICODE); exit; }
-            $list = array_values(array_filter(readData($dataFile), fn($x)=>($x['id']??'')!==$id));
+            $list = array_values(array_filter(readData($dataFile), function($x) use ($id) { return ($x['id'] ?? '') !== $id; }));
             writeData($dataFile, $list);
             echo json_encode(['code'=>200,'msg'=>'删除成功'], JSON_UNESCAPED_UNICODE);
             break;
@@ -142,7 +142,7 @@ try {
             if (!isset($obj['apis']) || !is_array($obj['apis'])) $obj['apis'] = [];
             if (!isset($obj['rules']) || !is_array($obj['rules'])) $obj['rules'] = [];
             $id = $_POST['id'] ?? $_REQUEST['id'] ?? '';
-            $obj['rules'] = array_values(array_filter($obj['rules'], fn($x)=>(($x['id']??'')!==$id)));
+            $obj['rules'] = array_values(array_filter($obj['rules'], function($x) use ($id) { return ($x['id'] ?? '') !== $id; }));
             file_put_contents($dataFile, json_encode($obj, JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT));
             echo json_encode(['code'=>200,'msg'=>'删除成功'], JSON_UNESCAPED_UNICODE);
             break;

@@ -21,13 +21,29 @@
  * --------------------------------------------------------- */
 function BOTAPI($Address, $me, $json) {
     $urls = [
+        "正式" => "https://api.bot.qq.com",
+        "沙箱" => "https://sandbox.api.bot.qq.com",
+    ];
+    $fallback = [
         "正式" => "https://api.sgroup.qq.com",
         "沙箱" => "https://sandbox.api.sgroup.qq.com",
     ];
-    $host = isset($urls[常量('type', '正式')]) ? $urls[常量('type', '正式')] : $urls["正式"];
+    $type = 常量('type', '正式');
+    $host = isset($urls[$type]) ? $urls[$type] : $urls["正式"];
     $url = $host . $Address;
     $header = ["Authorization: QQBot " . BOT凭证(), 'Content-Type: application/json'];
-    return curl($url, $me, $header, $json);
+    $result = curl($url, $me, $header, $json);
+    // 新域名不可达（网络失败 / 404）时回退旧域名，兼容域名切换过渡期
+    $decoded = json_decode($result, true);
+    if (!is_array($decoded) || (isset($decoded['code']) && $decoded['code'] == -1)) {
+        $oldHost = isset($fallback[$type]) ? $fallback[$type] : $fallback["正式"];
+        $oldResult = curl($oldHost . $Address, $me, $header, $json);
+        $oldDecoded = json_decode($oldResult, true);
+        if (is_array($oldDecoded) && (!isset($oldDecoded['code']) || $oldDecoded['code'] != -1)) {
+            return $oldResult;
+        }
+    }
+    return $result;
 }
 
 /** 安全读取常量 */
@@ -464,6 +480,214 @@ function 艾特($uid) {
 
 function 引用对象($msgId) {
     return ["message_id" => (string)$msgId];
+}
+
+/* ------------------------------------------------------------
+ * 群聊管理（官方 v2 群管理能力）
+ * --------------------------------------------------------- */
+/** 获取群基本信息（群名/简介/人数等） */
+function 群信息($group = null) {
+    $group = $group ?? 常量('来源', '');
+    if ($group === '') return null;
+    $r = BOTAPI("/v2/groups/{$group}/info", "GET", '');
+    $data = json_decode($r, true);
+    return is_array($data) ? $data : null;
+}
+
+/** 群名称 */
+function 群名($group = null) { $g = 群信息($group); return $g['group_name'] ?? null; }
+
+/** 群成员人数 */
+function 群人数($group = null) { $g = 群信息($group); return $g['group_member_num'] ?? null; }
+
+/** 机器人在群内的状态（入群时间/是否接收主动推送/身份） */
+function 机器人状态($group = null) {
+    $group = $group ?? 常量('来源', '');
+    if ($group === '') return null;
+    $r = BOTAPI("/v2/groups/{$group}/bot_state", "GET", '');
+    $data = json_decode($r, true);
+    return is_array($data) ? $data : null;
+}
+
+/** 群禁言底层：op = add 增加 / update 更新 / del 解除 */
+function 群禁言设置($uid, $op, $秒 = 0, $group = null, $到期时间 = null) {
+    $group = $group ?? 常量('来源', '');
+    if ($group === '' || $uid === '') return null;
+    $member = ['op' => $op, 'member_openid' => $uid];
+    if ($op === 'del') {
+        $member['mute_expire_at'] = '';
+    } else {
+        $member['mute_expire_at'] = $到期时间 !== null
+            ? (is_numeric($到期时间) ? date('c', (int)$到期时间) : $到期时间)
+            : date('c', time() + (int)$秒);
+    }
+    $r = BOTAPI("/v2/groups/{$group}/restrict_chat_setting", "POST",
+        json_encode(['members' => [$member]], JSON_UNESCAPED_UNICODE));
+    return json_decode($r, true) ?: null;
+}
+
+/** 禁言群成员（秒） */
+function 群禁言($uid, $秒, $group = null) {
+    return 群禁言设置($uid, 'add', $秒, $group);
+}
+
+/** 禁言到指定时间（时间戳或 RFC3339 字符串） */
+function 群禁言到($uid, $时间, $group = null) {
+    return 群禁言设置($uid, 'update', 0, $group, $时间);
+}
+
+/** 解除群成员禁言 */
+function 解除群禁言($uid, $group = null) {
+    return 群禁言设置($uid, 'del', 0, $group);
+}
+
+/** 查询群禁言状态（全员禁言模式 + 成员禁言列表） */
+function 查询群禁言($group = null) {
+    $group = $group ?? 常量('来源', '');
+    if ($group === '') return null;
+    $r = BOTAPI("/v2/groups/{$group}/restrict_chat_setting", "GET", '');
+    $data = json_decode($r, true);
+    return is_array($data) ? $data : null;
+}
+
+/** 判断成员当前是否处于禁言中 */
+function 是否禁言($uid, $group = null) {
+    $info = 查询群禁言($group);
+    if (!is_array($info) || empty($info['members'])) return false;
+    foreach ($info['members'] as $m) {
+        if (($m['member_openid'] ?? '') === $uid) {
+            $exp = $m['mute_expire_at'] ?? '';
+            if ($exp === '') return true;
+            $t = strtotime($exp);
+            return $t === false || $t > time();
+        }
+    }
+    return false;
+}
+
+/** 拉取入群申请列表（支持分页，limit 默认 20 最大 100） */
+function 入群申请($limit = 20, $cursor = '', $group = null) {
+    $group = $group ?? 常量('来源', '');
+    if ($group === '') return null;
+    $qs = http_build_query(['limit' => (int)$limit, 'cursor' => $cursor]);
+    $r = BOTAPI("/v2/groups/{$group}/join_request_list?{$qs}", "GET", '');
+    $data = json_decode($r, true);
+    return is_array($data) ? $data : null;
+}
+
+/** 审批入群：op = approve 通过 / decline 拒绝 */
+function 审批入群($uid, $op = 'approve', $申请id = null, $拒绝理由 = '', $拉黑 = false, $group = null) {
+    $group = $group ?? 常量('来源', '');
+    if ($group === '' || $uid === '') return null;
+    $body = ['op' => $op];
+    if ($申请id !== null) $body['join_request_id'] = (string)$申请id;
+    if ($op === 'decline') {
+        if ($拒绝理由 !== '') $body['reject_reason'] = $拒绝理由;
+        if ($拉黑) $body['add_to_member_blacklist'] = true;
+    }
+    $r = BOTAPI("/v2/groups/{$group}/approval_join_request/{$uid}", "POST",
+        json_encode($body, JSON_UNESCAPED_UNICODE));
+    return json_decode($r, true) ?: null;
+}
+
+/** 同意入群 */
+function 同意入群($uid, $申请id = null, $group = null) {
+    return 审批入群($uid, 'approve', $申请id, '', false, $group);
+}
+
+/** 拒绝入群（可拉黑） */
+function 拒绝入群($uid, $申请id = null, $理由 = '', $拉黑 = false, $group = null) {
+    return 审批入群($uid, 'decline', $申请id, $理由, $拉黑, $group);
+}
+
+/* ------------------------------------------------------------
+ * 频道管理（QQ 频道 / 子频道）
+ * --------------------------------------------------------- */
+/** 获取频道详情 */
+function 频道信息($guildId) {
+    if ($guildId === '') return null;
+    $r = BOTAPI("/guilds/{$guildId}", "GET", '');
+    $data = json_decode($r, true);
+    return is_array($data) ? $data : null;
+}
+
+/** 机器人所在频道列表 */
+function 我的频道() {
+    $r = BOTAPI("/users/me/guilds", "GET", '');
+    $data = json_decode($r, true);
+    return is_array($data) ? $data : [];
+}
+
+/** 获取频道下的子频道列表 */
+function 子频道列表($guildId) {
+    if ($guildId === '') return [];
+    $r = BOTAPI("/guilds/{$guildId}/channels", "GET", '');
+    $data = json_decode($r, true);
+    return is_array($data) ? $data : [];
+}
+
+/** 获取子频道详情 */
+function 子频道信息($channelId) {
+    if ($channelId === '') return null;
+    $r = BOTAPI("/channels/{$channelId}", "GET", '');
+    $data = json_decode($r, true);
+    return is_array($data) ? $data : null;
+}
+
+/** 频道指定成员禁言（秒） */
+function 频道禁言($guildId, $uid, $秒) {
+    if ($guildId === '' || $uid === '') return null;
+    $r = BOTAPI("/guilds/{$guildId}/members/{$uid}/mute", "PATCH",
+        json_encode(['mute_seconds' => (string)$秒]));
+    return json_decode($r, true) ?: null;
+}
+
+/** 解除频道指定成员禁言 */
+function 频道解禁($guildId, $uid) {
+    return 频道禁言($guildId, $uid, 0);
+}
+
+/** 频道全员禁言（秒，0 解除） */
+function 频道全员禁言($guildId, $秒 = 0) {
+    if ($guildId === '') return null;
+    $r = BOTAPI("/guilds/{$guildId}/mute", "PATCH",
+        json_encode(['mute_seconds' => (string)$秒]));
+    return json_decode($r, true) ?: null;
+}
+
+/** 频道批量成员禁言（秒，0 解除） */
+function 频道批量禁言($guildId, $uids, $秒) {
+    if ($guildId === '' || empty($uids)) return null;
+    $r = BOTAPI("/guilds/{$guildId}/mute", "PATCH",
+        json_encode(['mute_seconds' => (string)$秒, 'user_ids' => array_values($uids)]));
+    return json_decode($r, true) ?: null;
+}
+
+/** 获取频道成员详情 */
+function 频道成员($guildId, $uid) {
+    if ($guildId === '' || $uid === '') return null;
+    $r = BOTAPI("/guilds/{$guildId}/members/{$uid}", "GET", '');
+    $data = json_decode($r, true);
+    return is_array($data) ? $data : null;
+}
+
+/** 获取频道成员列表（分页游标 after） */
+function 频道成员列表($guildId, $limit = 100, $after = '') {
+    if ($guildId === '') return [];
+    $qs = http_build_query(['limit' => (int)$limit, 'after' => $after]);
+    $r = BOTAPI("/guilds/{$guildId}/members?{$qs}", "GET", '');
+    $data = json_decode($r, true);
+    return is_array($data) ? $data : [];
+}
+
+/** 踢出频道成员（可拉黑、可撤回历史消息，天数支持 3/7/15/30/-1） */
+function 踢出频道($guildId, $uid, $拉黑 = false, $撤回天数 = 0) {
+    if ($guildId === '' || $uid === '') return null;
+    $body = [];
+    if ($拉黑) $body['add_blacklist'] = true;
+    if ($撤回天数 != 0) $body['delete_history_msg_days'] = (int)$撤回天数;
+    $r = BOTAPI("/guilds/{$guildId}/members/{$uid}", "DELETE", json_encode($body));
+    return json_decode($r, true) ?: null;
 }
 
 /* ------------------------------------------------------------

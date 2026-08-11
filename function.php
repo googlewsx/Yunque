@@ -24,6 +24,32 @@ define('云雀', '云雀 Yunque');
 define('云雀版本', '3.0.0');
 
 /* ------------------------------------------------------------
+ * 0. mbstring 缺失时的兼容垫片（保证低依赖环境可用）
+ * --------------------------------------------------------- */
+if (!function_exists('mb_substr')) {
+    function mb_substr($str, $start, $length = null, $encoding = 'UTF-8') {
+        if (function_exists('iconv_substr')) {
+            if ($length === null) $length = function_exists('iconv_strlen') ? iconv_strlen($str, $encoding) : strlen($str);
+            return iconv_substr($str, $start, $length, $encoding);
+        }
+        $chars = preg_split('//u', (string)$str, -1, PREG_SPLIT_NO_EMPTY);
+        if (!is_array($chars)) return '';
+        $chars = array_slice($chars, $start, $length === null ? null : $length);
+        return implode('', $chars);
+    }
+}
+if (!function_exists('mb_strtolower')) {
+    function mb_strtolower($str, $encoding = 'UTF-8') {
+        return strtolower((string)$str);
+    }
+}
+if (!function_exists('mb_strpos')) {
+    function mb_strpos($haystack, $needle, $offset = 0, $encoding = 'UTF-8') {
+        return strpos((string)$haystack, (string)$needle, $offset);
+    }
+}
+
+/* ------------------------------------------------------------
  * 1. 文件级 JSON KV 存储
  * --------------------------------------------------------- */
 function 写($文件, $键, $值) {
@@ -227,6 +253,10 @@ function curl($url, $method, $headers, $params) {
             curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "DELETE");
             curl_setopt($ch, CURLOPT_POSTFIELDS, $requestString);
             break;
+        case "PATCH":
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "PATCH");
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $requestString);
+            break;
     }
     $response = curl_exec($ch);
     curl_close($ch);
@@ -299,10 +329,20 @@ function BOT信息($appidArg = null, $secretArg = null) {
     if ($appid === '' || $secret === '') return [];
     $Access = BOT凭证($appid, $secret);
     if ($Access === '') return [];
-    $urls = ["正式" => "https://api.sgroup.qq.com", "沙箱" => "https://sandbox.api.sgroup.qq.com"];
-    $host = (defined('type') ? type : '正式') === '沙箱' ? $urls["沙箱"] : $urls["正式"];
+    $urls = ["正式" => "https://api.bot.qq.com", "沙箱" => "https://sandbox.api.bot.qq.com"];
+    $fallback = ["正式" => "https://api.sgroup.qq.com", "沙箱" => "https://sandbox.api.sgroup.qq.com"];
+    $isSandbox = (defined('type') ? type : '正式') === '沙箱';
+    $host = $urls[$isSandbox ? "沙箱" : "正式"];
     $r = curl($host . "/users/@me", "GET", ["Authorization: QQBot " . $Access], '');
-    return json_decode($r, true) ?: [];
+    $decoded = json_decode($r, true);
+    if (!is_array($decoded)) {
+        // 新域名不可达时回退旧域名
+        $oldHost = $fallback[$isSandbox ? "沙箱" : "正式"];
+        $r2 = curl($oldHost . "/users/@me", "GET", ["Authorization: QQBot " . $Access], '');
+        $decoded2 = json_decode($r2, true);
+        if (is_array($decoded2)) return $decoded2;
+    }
+    return $decoded ?: [];
 }
 
 /* ------------------------------------------------------------
@@ -374,6 +414,41 @@ function HTML转图($html, $selector = ".container", $noCache = false, $quality 
     ];
     $header = ['Accept: image/' . $format, 'Content-Type: application/json'];
     return curl($url, "POST", $header, json_encode($params, JSON_UNESCAPED_UNICODE));
+}
+
+/** 机器人默认设置（后台新增开关时在此统一维护） */
+function 云雀默认设置() {
+    return [
+        "群非艾特" => true,        // 开启后接收群内非艾特消息
+        "排除机器人" => true,      // 忽略所有机器人账号消息
+        "自动去艾特" => true,      // 去掉消息中的所有艾特标记
+        "处理自己消息" => false,   // 是否处理机器人自己发出的消息
+        "仅群主可用" => false,     // 仅群主可触发插件
+        "屏蔽其他机器人" => false, // 忽略其他机器人消息（不影响自己）
+        "自动去开头艾特" => true,  // 非艾特消息自动去掉开头的艾特机器人+空格
+    ];
+}
+
+/** 读取某个机器人配置里的主人信息（无则返回 null） */
+function 云雀主人($appid = null) {
+    $appid = $appid ?? (defined('appid') ? appid : '');
+    if ($appid === '') return null;
+    $raw = @file_get_contents(__DIR__ . "/main.json");
+    $main = json_decode($raw, true);
+    if (!is_array($main) || !isset($main[$appid]["主人"])) return null;
+    $owner = $main[$appid]["主人"];
+    return is_array($owner) ? $owner : null;
+}
+
+/** 当前机器人主人的 openid（插件可直接调用，空串表示未设置） */
+function 主人ID($appid = null) {
+    $owner = 云雀主人($appid);
+    return ($owner && isset($owner['id'])) ? (string)$owner['id'] : '';
+}
+
+/** 当前机器人自身的 openid（插件可直接调用，需要已配置 secret） */
+function 机器人ID($appidArg = null, $secretArg = null) {
+    return 自身ID($appidArg, $secretArg);
 }
 
 /** 读取后台全局配置 */

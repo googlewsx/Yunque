@@ -409,6 +409,29 @@ body{position:relative;min-height:100%;}
         </div>
     </div>
 
+    <!-- 插件作用域模态框 -->
+    <div class="modal" id="scopeModal">
+        <div class="modal-content" style="max-width:640px;">
+            <div class="modal-header"><h3>插件作用域</h3><button class="close-btn" data-close="scopeModal">&times;</button></div>
+            <div class="modal-body">
+                <div class="form-group"><label>插件</label><input type="text" class="form-control" id="scopePluginName" readonly></div>
+                <div class="form-group">
+                    <label>生效范围</label>
+                    <select class="form-control" id="scopeMode">
+                        <option value="all">全部群</option>
+                        <option value="specified">仅指定群</option>
+                    </select>
+                </div>
+                <div class="form-group" id="scopeGroupsWrap">
+                    <label>指定生效的群（从日志中遍历选择）</label>
+                    <input type="text" class="form-control" id="scopeSearch" placeholder="搜索群 openid…">
+                    <div id="scopeGroups" style="margin-top:8px;display:grid;gap:6px;max-height:42vh;overflow:auto;"></div>
+                </div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-secondary" data-close="scopeModal">取消</button><button class="btn btn-primary" id="saveScopeBtn"><i class="fas fa-save"></i> 保存作用域</button></div>
+        </div>
+    </div>
+
     <div id="notification" class="notification"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
@@ -494,12 +517,14 @@ body{position:relative;min-height:100%;}
                         ${isEnabled !== null ? (isEnabled ? 
                             `<button class="btn btn-warning toggle-plugin" data-plugin="${plugin}" data-action="disable"><i class="fas fa-toggle-off"></i> 禁用</button>` :
                             `<button class="btn btn-success toggle-plugin" data-plugin="${plugin}" data-action="enable"><i class="fas fa-toggle-on"></i> 启用</button>`) : ''}
+                        <button class="btn btn-secondary scope-plugin" data-plugin="${plugin}"><i class="fas fa-location-arrow"></i> 作用域</button>
                         <button class="btn btn-secondary edit-plugin" data-plugin="${plugin}"><i class="fas fa-edit"></i> 编辑</button>
                         <button class="btn btn-danger delete-plugin" data-plugin="${plugin}"><i class="fas fa-trash"></i> 删除</button>
                     </div>
                 </div>
             `).join('');
             container.querySelectorAll('.toggle-plugin').forEach(btn => btn.addEventListener('click', () => togglePlugin(btn.dataset.plugin, btn.dataset.action)));
+            container.querySelectorAll('.scope-plugin').forEach(btn => btn.addEventListener('click', () => openScopeModal(btn.dataset.plugin)));
             container.querySelectorAll('.edit-plugin').forEach(btn => btn.addEventListener('click', () => openEditModal(btn.dataset.plugin)));
             container.querySelectorAll('.delete-plugin').forEach(btn => btn.addEventListener('click', () => openDeleteModal(btn.dataset.plugin)));
         }
@@ -569,6 +594,72 @@ body{position:relative;min-height:100%;}
                 if (data.code === 200) { showMsg('添加成功', true); closeModal('addModal'); document.getElementById('pluginName').value = ''; loadPlugins(); }
                 else showMsg(data.msg || '添加失败', false);
             } catch (err) { showMsg('添加失败', false); }
+        });
+
+        /* ---------- 插件作用域（从日志遍历选择群） ---------- */
+        let scopePlugin = null;
+        let scopeGroupsData = [];
+        let scopeSelectedGroups = new Set();
+
+        async function openScopeModal(plugin) {
+            scopePlugin = plugin;
+            scopeSelectedGroups = new Set();
+            document.getElementById('scopePluginName').value = plugin;
+            document.getElementById('scopeMode').value = 'all';
+            document.getElementById('scopeSearch').value = '';
+            document.getElementById('scopeGroupsWrap').style.display = 'block';
+            const g = await fetch(`api/bot.php?type=groups&appid=${encodeURIComponent(appid)}`).then(r => r.json()).catch(() => null);
+            scopeGroupsData = (g && g.code === 200 && Array.isArray(g.groups)) ? g.groups : [];
+            const s = await fetch(`api/plugin.php?type=scopes&appid=${encodeURIComponent(appid)}`).then(r => r.json()).catch(() => null);
+            if (s && s.code === 200 && s.scopes && s.scopes[plugin]) {
+                const cfg = s.scopes[plugin];
+                document.getElementById('scopeMode').value = cfg.scope === 'specified' ? 'specified' : 'all';
+                (cfg.groups || []).forEach(id => scopeSelectedGroups.add(id));
+            }
+            renderScopeGroups();
+            syncScopeWrap();
+            document.getElementById('scopeModal').style.display = 'flex';
+        }
+
+        function syncScopeWrap() {
+            document.getElementById('scopeGroupsWrap').style.display = document.getElementById('scopeMode').value === 'specified' ? 'block' : 'none';
+        }
+
+        function renderScopeGroups() {
+            const kw = document.getElementById('scopeSearch').value.trim().toLowerCase();
+            const box = document.getElementById('scopeGroups');
+            const list = scopeGroupsData.filter(g => !kw || String(g.id).toLowerCase().includes(kw) || String(g.last_time || '').includes(kw));
+            if (!list.length) {
+                box.innerHTML = '<div class="empty-state">暂无群记录（需要先有群聊日志）</div>';
+                return;
+            }
+            box.innerHTML = list.map(g => {
+                const checked = scopeSelectedGroups.has(g.id) ? 'checked' : '';
+                return `<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:white;">
+                    <input type="checkbox" value="${escapeHtml(g.id)}" ${checked}>
+                    <span style="font-size:12px;word-break:break-all;flex:1;">${escapeHtml(g.id)}</span>
+                    <span style="font-size:10px;color:var(--text-muted);white-space:nowrap;">${escapeHtml(g.last_time)}</span>
+                </label>`;
+            }).join('');
+            box.querySelectorAll('input[type=checkbox]').forEach(cb => {
+                cb.addEventListener('change', () => {
+                    if (cb.checked) scopeSelectedGroups.add(cb.value); else scopeSelectedGroups.delete(cb.value);
+                });
+            });
+        }
+
+        document.getElementById('scopeMode').addEventListener('change', syncScopeWrap);
+        document.getElementById('scopeSearch').addEventListener('input', renderScopeGroups);
+        document.getElementById('saveScopeBtn').addEventListener('click', async () => {
+            if (!scopePlugin) return;
+            const scope = document.getElementById('scopeMode').value;
+            const groups = scope === 'specified' ? Array.from(scopeSelectedGroups) : [];
+            try {
+                const res = await fetch(`api/plugin.php?type=scope&appid=${encodeURIComponent(appid)}&name=${encodeURIComponent(scopePlugin)}&scope=${encodeURIComponent(scope)}&groups=${encodeURIComponent(JSON.stringify(groups))}`);
+                const data = await res.json();
+                if (data.code === 200) { showMsg('作用域已保存', true); closeModal('scopeModal'); loadPlugins(); }
+                else showMsg(data.msg || '保存失败', false);
+            } catch (err) { showMsg('保存失败', false); }
         });
 
         // Tab切换

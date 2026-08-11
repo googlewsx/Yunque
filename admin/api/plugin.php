@@ -170,4 +170,54 @@ switch ($type) {
                 echo json_encode($json,480);
             }
         break;
+
+    case "scopes":
+        // 获取某个机器人的全部插件作用域配置
+        $appid = $_REQUEST["appid"] ?? "";
+        $maincontent = @file_get_contents($main);
+        $json = json_decode($maincontent, true);
+        $plugins = (isset($json[$appid]["plugin"]) && is_array($json[$appid]["plugin"])) ? $json[$appid]["plugin"] : [];
+        $result = [];
+        foreach ($plugins as $name => $cfg) {
+            if (is_bool($cfg)) {
+                $result[$name] = ["enable" => $cfg, "scope" => "all", "groups" => []];
+            } elseif (is_array($cfg)) {
+                $result[$name] = [
+                    "enable" => (bool)($cfg["enable"] ?? false),
+                    "scope" => $cfg["scope"] ?? "all",
+                    "groups" => $cfg["groups"] ?? [],
+                ];
+            }
+        }
+        echo json_encode(["code" => 200, "scopes" => $result], 480);
+        break;
+
+    case "scope":
+        // 设置插件作用域：scope = all / specified，specified 时指定 groups 群列表
+        $appid = $_REQUEST["appid"] ?? "";
+        $name = $_REQUEST["name"] ?? "";
+        $scope = $_REQUEST["scope"] ?? "all";
+        $groupsRaw = $_REQUEST["groups"] ?? "[]";
+        $groups = json_decode($groupsRaw, true);
+        if (!is_array($groups)) $groups = [];
+        if ($appid === "" || $name === "") {
+            echo json_encode(["code" => 400, "msg" => "缺少参数"], 480);
+            exit;
+        }
+        $maincontent = @file_get_contents($main);
+        $json = json_decode($maincontent, true);
+        if (!is_array($json)) $json = [];
+        if (!isset($json[$appid])) {
+            echo json_encode(["code" => 400, "msg" => "机器人不存在"], 480);
+            exit;
+        }
+        $cfg = [
+            "enable" => true,
+            "scope" => $scope === "specified" ? "specified" : "all",
+            "groups" => array_values($groups),
+        ];
+        $json[$appid]["plugin"][$name] = $cfg;
+        file_put_contents($main, json_encode($json, 480));
+        echo json_encode(["code" => 200, "msg" => "作用域已保存"], 480);
+        break;
 }

@@ -1,6 +1,13 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 
+// mbstring 缺失时的兼容垫片
+if (!function_exists('mb_strpos')) {
+    function mb_strpos($haystack, $needle, $offset = 0, $encoding = 'UTF-8') {
+        return strpos((string)$haystack, (string)$needle, $offset);
+    }
+}
+
 $type = $_REQUEST['type'] ?? 'list';
 $root = dirname(__DIR__, 2);
 $pluginDir = $root . '/plugin';

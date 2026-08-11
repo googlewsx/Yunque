@@ -114,6 +114,10 @@ input,select,textarea{font-family:inherit;outline:none}
 .emoji{width:24px;height:24px;vertical-align:-4px;margin:0 1px}
 .emoji-tok{background:#eef1ff;color:var(--brand);border-radius:8px;padding:0 6px;font-size:12px}
 .msg-attach{color:var(--brand);text-decoration:none;font-size:13px;display:block;margin-top:4px;word-break:break-all}
+.msg-tools{display:none;gap:6px;margin-top:6px;flex-wrap:wrap}
+.msg:hover .msg-tools{display:flex}
+.mact{background:#fff;border:1px solid var(--line);color:var(--muted);border-radius:8px;padding:3px 9px;font-size:11.5px;cursor:pointer;transition:.15s}
+.mact:hover{color:var(--brand);border-color:var(--brand)}
 
 /* ---------- 输入区 ---------- */
 .composer{background:var(--card);border-top:1px solid var(--line);padding:8px 14px 12px;flex-shrink:0}
@@ -202,6 +206,7 @@ input,select,textarea{font-family:inherit;outline:none}
         </div>
         <div class="top-actions">
             <select id="botPicker"></select>
+            <select id="logFileSelect" title="选择日志日期"><option value="">选择日期</option></select>
             <button class="icon-btn" id="refreshBtn" title="刷新列表">⟳</button>
         </div>
     </header>
@@ -309,7 +314,10 @@ const state = {
     lastKey:'', 
     msgInit:false, 
     listSig:'',
-    nicknameMap: {}
+    nicknameMap: {},
+    logName: '',
+    groupNamePending: {},
+    groupNameFailed: {}
 };
 
 // ---- 机器人全局变量 ----
@@ -471,11 +479,15 @@ async function loadBots(){
         state.current = null;
         state.msgInit = false;
         state.nicknameMap = {};
+        state.groupNamePending = {};
+        state.groupNameFailed = {};
+        state.logName = '';
         $('msgList').innerHTML = '';
         $('composer').style.display = 'none';
         $('chatHead').style.display = 'none';
         $('chatEmpty').style.display = 'flex';
         loadList();
+        loadLogFiles();
         if(window.innerWidth <= 820){
             document.getElementById('sidebar').classList.remove('hide');
         }
@@ -499,8 +511,36 @@ async function loadList(){
     renderList();
 }
 function dateLogName(){
+    if (state.logName) return state.logName;
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.log`;
+}
+function resetConversation(){
+    state.current = null;
+    state.msgInit = false;
+    state.lastMsgTime = '';
+    $('msgList').innerHTML = '';
+    $('composer').style.display = 'none';
+    $('chatHead').style.display = 'none';
+    $('chatEmpty').style.display = 'flex';
+}
+async function loadLogFiles(){
+    const sel = $('logFileSelect');
+    if(!state.appid){ sel.innerHTML = '<option value="">选择日期</option>'; return; }
+    const today = dateLogName();
+    try {
+        const data = await fetch(`api/log.php?type=list&appid=${encodeURIComponent(state.appid)}`).then(r=>r.json());
+        let files = (data && Array.isArray(data.list)) ? data.list : [];
+        files = files.filter(f=>/\.log$/i.test(f)).sort().reverse();
+        if(!files.includes(today)) files.unshift(today);
+        sel.innerHTML = files.map(f=>`<option value="${esc(f)}" ${f===state.logName?'selected':''}>${esc(f.replace(/\.log$/i,''))}</option>`).join('');
+        if(!state.logName || !files.includes(state.logName)){
+            state.logName = today;
+            sel.value = today;
+        }
+    } catch (e) {
+        sel.innerHTML = '<option value="">选择日期</option>';
+    }
 }
 function previewClean(txt){
     if(txt == null) return '';
@@ -515,13 +555,13 @@ function renderList(){
     if(kw) list = list.filter(c =>
         String(c.id||'').toLowerCase().includes(kw) ||
         String(c.last_message||'').toLowerCase().includes(kw) ||
-        (c.title||'').toLowerCase().includes(kw)
+        String(c.name||c.title||'').toLowerCase().includes(kw)
     );
     const box = $('convList');
     if(!list.length){ box.innerHTML = '<div class="conv empty">暂无会话</div>'; return; }
     box.innerHTML = list.map(c=>{
         const isActive = state.current && state.current.type===c.type && state.current.id===c.id;
-        const defaultName = c.title || shortId(c.id, c.type);
+        const defaultName = c.name || c.title || shortId(c.id, c.type);
         const displayName = getDisplayName(c.type, c.id, defaultName);
         let avatarHtml = '';
         if (c.type === 'private') {
@@ -567,12 +607,49 @@ function renderList(){
     box.querySelectorAll('.conv').forEach(el=>el.addEventListener('click', ()=>{
         const type = el.dataset.type, id = el.dataset.id;
         const conv = (state.convs[type]||[]).find(c=>c.id===id);
-        openChat(type, id, conv ? (conv.title || shortId(id,type)) : shortId(id,type), conv || {});
+        openChat(type, id, conv ? (conv.name || conv.title || shortId(id,type)) : shortId(id,type), conv || {});
     }));
+
+    if (state.tab === 'group') fetchGroupNames();
 }
 function shortId(id, type){
     if(!id) return '未知会话';
     return type==='group' ? ('群 ' + id.slice(-6)) : ('用户 ' + id.slice(-6));
+}
+
+/* ---------- 群名异步补齐（官方群信息接口 + 缓存） ---------- */
+function updateGroupNameDisplay(id, name){
+    document.querySelectorAll('.conv[data-type="group"]').forEach(conv => {
+        if (conv.dataset.id !== id) return;
+        const nameEl = conv.querySelector('.nm b');
+        if (nameEl && !getRemark('group', id)) nameEl.textContent = name;
+    });
+    if (state.current && state.current.type === 'group' && state.current.id === id) {
+        document.getElementById('headName').textContent = getRemark('group', id) || name;
+    }
+}
+function fetchGroupNames(){
+    if (!state.appid) return;
+    const groups = state.convs.group || [];
+    groups.forEach(c => {
+        const id = c.id;
+        if (c.name) return;
+        if (getRemark('group', id)) return;
+        if (state.groupNamePending[id] || state.groupNameFailed[id]) return;
+        state.groupNamePending[id] = true;
+        fetch(`${API}?type=group_name&appid=${encodeURIComponent(state.appid)}&group_id=${encodeURIComponent(id)}`)
+            .then(r => r.json())
+            .then(d => {
+                if (d.code === 200 && d.name) {
+                    c.name = d.name;
+                    updateGroupNameDisplay(id, d.name);
+                } else {
+                    state.groupNameFailed[id] = true;
+                }
+            })
+            .catch(() => { state.groupNameFailed[id] = true; })
+            .finally(() => { delete state.groupNamePending[id]; });
+    });
 }
 
 /* ---------- 聊天详情 ---------- */
@@ -774,14 +851,57 @@ function renderMsg(m){
         displayName = cleanName(displayName);
     }
 
+    const tools = [];
+    if (isMe && m.message_id && state.current && state.current.id) {
+        tools.push(`<button class="mact revoke" data-msgid="${esc(m.message_id)}" data-chatid="${esc(state.current.id)}" data-chattype="${state.current.type}" title="撤回这条消息">↩ 撤回</button>`);
+    }
+    if (!isMe && state.current && state.current.type === 'group' && m.user_id) {
+        tools.push(`<button class="mact mute" data-uid="${esc(m.user_id)}" data-chatid="${esc(state.current.id)}" title="禁言 / 解除禁言（需要机器人有管理权限）">🔇 禁言</button>`);
+    }
+    const toolsHtml = tools.length ? `<div class="msg-tools">${tools.join('')}</div>` : '';
+
     return `<div class="msg ${isMe?'me':'them'}" data-id="${esc(m.message_id||'')}">
         ${avatarHtml}
         <div class="bubble">
             <div class="bname">${esc(displayName)}</div>
             <div class="body">${html}${time}</div>
+            ${toolsHtml}
         </div>
     </div>`;
 }
+
+$('msgList').addEventListener('click', async function(e) {
+    const revokeBtn = e.target.closest('.mact.revoke');
+    if (revokeBtn) {
+        e.preventDefault();
+        if (!confirm('确定撤回这条消息吗？（需在发送后 2 分钟内）')) return;
+        const {chatid, chattype, msgid} = revokeBtn.dataset;
+        try {
+            const res = await fetch(`${API}?type=revoke&appid=${encodeURIComponent(state.appid)}&chat_type=${chattype}&chat_id=${encodeURIComponent(chatid)}&msg_id=${encodeURIComponent(msgid)}`).then(r=>r.json());
+            if (res.code === 200) {
+                toast('撤回成功', true);
+                const msgEl = revokeBtn.closest('.msg');
+                if (msgEl) msgEl.remove();
+            } else {
+                toast(res.msg || '撤回失败', false);
+            }
+        } catch (err) { toast('撤回失败', false); }
+        return;
+    }
+    const muteBtn = e.target.closest('.mact.mute');
+    if (muteBtn) {
+        e.preventDefault();
+        const sec = prompt('禁言时长（秒），输入 0 或留空为解除禁言：', '600');
+        if (sec === null) return;
+        const seconds = parseInt(sec || '0', 10) || 0;
+        try {
+            const res = await fetch(`${API}?type=mute&appid=${encodeURIComponent(state.appid)}&group_id=${encodeURIComponent(muteBtn.dataset.chatid)}&user_id=${encodeURIComponent(muteBtn.dataset.uid)}&seconds=${seconds}`).then(r=>r.json());
+            if (res.code === 200) toast(res.msg || '操作成功', true);
+            else toast(res.msg || '操作失败', false);
+        } catch (err) { toast('操作失败', false); }
+        return;
+    }
+});
 
 $('msgList').addEventListener('click', function(e) {
     const avatar = e.target.closest('.msg.them .ava');
@@ -928,12 +1048,18 @@ $('refreshBtn').addEventListener('click', loadList);
 $('refreshChatBtn').addEventListener('click', ()=>loadMessages(true));
 $('backBtn').addEventListener('click', ()=>{ $('sidebar').classList.remove('hide'); });
 $('searchInput').addEventListener('input', renderList);
+$('logFileSelect').addEventListener('change', (e)=>{
+    state.logName = e.target.value || '';
+    resetConversation();
+    loadList();
+});
 
 /* ---------- 初始化 ---------- */
 (function init(){
     bindTabs();
     $('chatEmpty').style.display = 'flex';
     loadBots();
+    loadLogFiles();
     startPolling();
 })();
 </script>
