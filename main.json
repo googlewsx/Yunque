@@ -1,0 +1,40 @@
+{
+    "102295278": {
+        "secret": "iIsT4gJwaEtYEubI0jSCwhSE0naOC1rh",
+        "type": "正式",
+        "plugin": {
+            "菜单": true,
+            "掷骰子": true,
+            "音乐系统": true,
+            "视频解析": true,
+            "卡密": true,
+            "全局": true,
+            "一言": true,
+            "加群": true,
+            "撤回": true,
+            "战力测试": true,
+            "王者开房": true,
+            "抽奖": true
+        }
+    },
+    "1904139651": {
+        "secret": "w7JViv9Odt9QhzHatDYtFbyLj7WvLmDf",
+        "type": "正式",
+        "plugin": {
+            "热搜": true
+        },
+        "主人": {
+            "name": "小小萌先生",
+            "id": "A824022AB8BD19DCED5DE448F8ADE965",
+            "qq_number": "",
+            "remark": ""
+        }
+    },
+    "1904956241": {
+        "secret": "E0naOD2siZQIA3wqlgcYVSQONMMMNPRU",
+        "type": "正式",
+        "plugin": {
+            "王者开房": true
+        }
+    }
+}

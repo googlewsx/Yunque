@@ -1,0 +1,360 @@
+/* 现代化毛玻璃风格 - 全新设计 */
+:root {
+    --primary: #667eea;
+    --secondary: #764ba2;
+    --glass-white: rgba(255, 255, 255, 0.25);
+    --glass-white-hover: rgba(255, 255, 255, 0.35);
+    --glass-white-active: rgba(255, 255, 255, 0.45);
+    --text-dark: #2d3748;
+    --text-dark-secondary: #4a5568;
+    --border-glass: rgba(255, 255, 255, 0.3);
+    --shadow-glass: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+    --shadow-hover: 0 12px 40px 0 rgba(31, 38, 135, 0.45);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background-attachment: fixed;
+    min-height: 100vh;
+    color: var(--text-dark);
+    overflow: hidden;
+}
+
+/* 毛玻璃卡片基础样式 */
+.glass-card {
+    background: var(--glass-white);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 24px;
+    border: 1px solid var(--border-glass);
+    box-shadow: var(--shadow-glass);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card:hover {
+    box-shadow: var(--shadow-hover);
+    transform: translateY(-2px);
+}
+
+/* Header 样式 */
+.header {
+    background: var(--glass-white);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border-glass);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.header * {
+    color: var(--text-dark) !important;
+}
+
+.header-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-dark) !important;
+    text-shadow: 0 2px 4px rgba(255, 255, 255, 0.5);
+    letter-spacing: 0.5px;
+}
+
+/* 按钮样式 */
+.btn-glass {
+    background: var(--glass-white);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--border-glass);
+    border-radius: 16px;
+    padding: 10px 20px;
+    color: var(--text-dark) !important;
+    font-weight: 600;
+    transition: all 0.3s;
+    cursor: pointer;
+}
+
+.btn-glass:hover {
+    background: var(--glass-white-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+    color: var(--text-dark) !important;
+}
+
+.btn-glass:active {
+    transform: translateY(0);
+}
+
+/* 所有按钮文字深色 */
+.btn, button, .back-btn, .chat-action-btn {
+    color: var(--text-dark) !important;
+}
+
+.btn:hover, button:hover {
+    color: var(--text-dark) !important;
+}
+
+/* 侧边栏样式 */
+.sidebar .card {
+    background: var(--glass-white);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--border-glass);
+    border-radius: 24px;
+    box-shadow: var(--shadow-glass);
+}
+
+/* 聊天列表项 */
+.list-group-item {
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    color: var(--text-dark) !important;
+    transition: all 0.3s;
+    padding: 14px 16px;
+    cursor: pointer;
+}
+
+.list-group-item h6,
+.list-group-item small,
+.list-group-item * {
+    color: var(--text-dark) !important;
+}
+
+.list-group-item:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: translateX(4px);
+}
+
+.list-group-item.active {
+    background: rgba(255, 255, 255, 0.25);
+    border-left: 4px solid var(--text-dark);
+    box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.1);
+}
+
+/* 消息容器 */
+.messages-container {
+    background: rgba(0, 0, 0, 0.05);
+    padding: 20px;
+}
+
+/* 消息气泡 */
+.message-item.user .message-content {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    color: #2d3748;
+    border-radius: 18px 18px 4px 18px;
+    padding: 12px 16px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.message-item.bot .message-content {
+    background: rgba(102, 126, 234, 0.25);
+    backdrop-filter: blur(10px);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 18px 18px 18px 4px;
+    padding: 12px 16px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+/* 输入区域 */
+#sendArea {
+    background: var(--glass-white);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border-glass);
+    padding: 16px;
+}
+
+#sendInput {
+    background: rgba(255, 255, 255, 0.3) !important;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.45) !important;
+    border-radius: 16px;
+    color: var(--text-dark) !important;
+    padding: 12px 16px;
+    transition: all 0.3s;
+}
+
+#sendInput:focus {
+    background: rgba(255, 255, 255, 0.4) !important;
+    border-color: rgba(255, 255, 255, 0.6) !important;
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.2) !important;
+    outline: none;
+}
+
+#sendInput::placeholder {
+    color: rgba(45, 55, 72, 0.6) !important;
+}
+
+#sendBtn {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0.3) 100%);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: 16px;
+    color: var(--text-dark) !important;
+    font-weight: 700;
+    padding: 12px 24px;
+    transition: all 0.3s;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+}
+
+#sendBtn:hover {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0.4) 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+    color: var(--text-dark) !important;
+}
+
+/* 切换按钮 */
+.chat-type-buttons .btn {
+    background: rgba(255, 255, 255, 0.2) !important;
+    border: 1px solid rgba(255, 255, 255, 0.35) !important;
+    color: var(--text-dark) !important;
+    transition: all 0.3s;
+    font-weight: 600;
+}
+
+.chat-type-buttons .btn:hover {
+    background: rgba(255, 255, 255, 0.3) !important;
+    color: var(--text-dark) !important;
+}
+
+.chat-type-buttons .btn.active {
+    background: rgba(255, 255, 255, 0.45) !important;
+    border-color: rgba(255, 255, 255, 0.6) !important;
+    color: var(--text-dark) !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+}
+
+/* 搜索框 */
+.search-wrapper {
+    background: rgba(255, 255, 255, 0.25);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 16px;
+    padding: 8px 16px;
+    transition: all 0.3s;
+}
+
+.search-wrapper:focus-within {
+    background: rgba(255, 255, 255, 0.35);
+    border-color: rgba(255, 255, 255, 0.5);
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.15);
+}
+
+.search-input-modern {
+    background: transparent;
+    border: none;
+    color: var(--text-dark);
+    outline: none;
+}
+
+.search-input-modern::placeholder {
+    color: rgba(45, 55, 72, 0.6);
+}
+
+.search-icon {
+    color: var(--text-dark-secondary);
+}
+
+/* 下拉选择框 */
+.form-select {
+    background: rgba(255, 255, 255, 0.25) !important;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.35) !important;
+    border-radius: 12px;
+    color: var(--text-dark) !important;
+    padding: 8px 12px;
+    transition: all 0.3s;
+}
+
+.form-select:hover {
+    background: rgba(255, 255, 255, 0.3) !important;
+    border-color: rgba(255, 255, 255, 0.45) !important;
+}
+
+.form-select:focus {
+    background: rgba(255, 255, 255, 0.35) !important;
+    border-color: rgba(255, 255, 255, 0.55) !important;
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.15);
+    outline: none;
+}
+
+.form-select option {
+    background: #5a67d8 !important;
+    color: white !important;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    transition: all 0.3s;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* 动画 */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.message-item {
+    animation: fadeIn 0.3s ease;
+}
+
+/* 头像样式 */
+.chat-avatar,
+.message-avatar {
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+/* 徽章样式 */
+.appid-badge {
+    background: rgba(255, 255, 255, 0.3);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 12px;
+    padding: 6px 14px;
+    color: var(--text-dark);
+    font-weight: 600;
+    font-size: 13px;
+}
+
+/* 空状态 */
+.empty-state {
+    color: rgba(45, 55, 72, 0.7);
+}
+
+.empty-state i {
+    opacity: 0.5;
+}

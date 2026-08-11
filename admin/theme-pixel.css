@@ -1,0 +1,141 @@
+/* 逐页像素级对齐（chat.php 基准） */
+:root{
+  --px-radius-lg:16px;
+  --px-radius-md:12px;
+  --px-gap:12px;
+  --px-pad:14px;
+}
+
+/* 全局节奏 */
+body{font-size:14px;letter-spacing:.1px}
+.main-content{padding:14px !important}
+.container{max-width:1280px !important}
+
+/* 顶部与侧边的卡片感 */
+.sidebar,.topbar,.header,.nav-wrap{
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* 统计卡 */
+.stat-card{
+  border-radius:var(--px-radius-lg) !important;
+  padding:14px !important;
+  box-shadow:0 8px 20px rgba(95,108,201,.15) !important;
+}
+.stat-label{font-size:12px !important;color:#7c82a9 !important}
+.stat-value{font-weight:800 !important;line-height:1.1}
+
+/* 功能卡片 */
+.card,.section-card,.bot-card,.plugin-card,.log-card{
+  border-radius:var(--px-radius-lg) !important;
+  border:1px solid rgba(255,255,255,.88) !important;
+  box-shadow:0 10px 24px rgba(95,108,201,.16) !important;
+}
+.card-header{
+  padding:14px 16px !important;
+  border-bottom:1px solid rgba(124,130,169,.2) !important;
+}
+.card-body{padding:14px !important}
+
+/* 表单 */
+.form-group,.mb-3{margin-bottom:10px !important}
+label,.form-label{font-size:12px;color:#6f77a8;font-weight:700}
+
+/* 列表条目 */
+.list-group-item,.log-card,.plugin-item,.bot-item{
+  border-radius:12px !important;
+}
+
+/* Tab / Pill */
+.nav-tabs .nav-link,.tab-btn,.filter-btn{
+  border-radius:10px !important;
+  padding:7px 12px !important;
+}
+
+/* 登录页单独对齐 */
+.login-card{
+  border-radius:20px !important;
+  padding:20px !important;
+  border:1px solid rgba(255,255,255,.9) !important;
+  box-shadow:0 18px 42px rgba(95,108,201,.22) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* 移动端 */
+@media (max-width:900px){
+  .main-content{padding:10px !important}
+  .card-header{padding:12px 12px !important}
+  .card-body{padding:12px !important}
+  .stat-card{padding:12px !important}
+}
+
+
+/* ===== 逐页点对点微调 ===== */
+
+/* main.php */
+body .stats-grid{gap:12px !important}
+body .section-card{padding:12px !important}
+body .bot-card{padding:12px !important;border-radius:14px !important}
+body .bot-card .title, body .bot-card h3{font-size:14px !important;font-weight:700 !important}
+
+/* log.php */
+body .log-list{gap:8px !important}
+body .log-card{padding:10px 12px !important;border-left-width:3px !important}
+body .log-card .time, body .log-card .meta{font-size:12px !important;color:#7981af !important}
+body #logList .empty-state{padding:20px 10px !important;color:#8a92bd !important}
+
+/* plugin.php */
+body .plugin-grid{gap:10px !important}
+body .plugin-card{padding:12px !important}
+body .plugin-card .plugin-name{font-size:14px !important;font-weight:700 !important}
+body .plugin-card .plugin-desc{font-size:12px !important;line-height:1.5 !important;color:#7780ac !important}
+
+/* set.php */
+body .card + .card{margin-top:12px !important}
+body .card-header h2{font-size:15px !important}
+body .message{border-radius:10px !important;padding:10px 12px !important}
+
+/* doc.php */
+body .markdown-body{font-size:14px !important;line-height:1.7 !important}
+body .markdown-body h1, body .markdown-body h2, body .markdown-body h3{color:#4f5aa3 !important}
+body .markdown-body pre{border-radius:12px !important;background:rgba(38,45,86,.92) !important}
+body .markdown-body table{border-radius:10px !important;overflow:hidden}
+
+/* index.php */
+body .login-card{width:min(420px,92vw) !important}
+body .login-card h1, body .login-card h2{font-size:20px !important;letter-spacing:.3px}
+body .login-card .form-control{height:42px !important}
+body .login-card .btn{height:42px !important;font-weight:700 !important}
+
+@media (max-width:900px){
+  body .stats-grid, body .plugin-grid{gap:8px !important}
+  body .log-card, body .plugin-card, body .bot-card{padding:10px !important}
+  body .login-card{padding:16px !important}
+}
+
+
+/* 强制隐藏滚动条（高优先级兜底） */
+html,body,*{
+  scrollbar-width:none !important;
+  -ms-overflow-style:none !important;
+}
+html::-webkit-scrollbar,body::-webkit-scrollbar,*::-webkit-scrollbar{
+  width:0 !important;
+  height:0 !important;
+  display:none !important;
+  background:transparent !important;
+}
+*::-webkit-scrollbar-thumb,*::-webkit-scrollbar-track{
+  background:transparent !important;
+}
+
+/* 常见滚动容器兜底 */
+.messages,.menu,.log-list,.plugin-grid,.card-body,.table-responsive,textarea,#chatInput{
+  scrollbar-width:none !important;
+  -ms-overflow-style:none !important;
+}
+.messages::-webkit-scrollbar,.menu::-webkit-scrollbar,.log-list::-webkit-scrollbar,.plugin-grid::-webkit-scrollbar,.card-body::-webkit-scrollbar,.table-responsive::-webkit-scrollbar,textarea::-webkit-scrollbar,#chatInput::-webkit-scrollbar{
+  width:0 !important;height:0 !important;display:none !important;
+}
