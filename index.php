@@ -241,6 +241,12 @@ function Main($raw)
             define("来源", $d["group_openid"] ?? ($d["user_openid"] ?? ''));
             define("用户", $d["user_openid"] ?? ($d["group_member_openid"] ?? ''));
             break;
+        case "GROUP_JOIN_REQUEST":
+        define("消息来源", "入群申请");
+        define("事件ID", $raw["id"] ?? '');
+        define("来源", $d["group_openid"] ?? '');
+        define("用户", $d["member_openid"] ?? '');
+        break;
 
         default:
             // 未知/频道类事件：记录但不处理
