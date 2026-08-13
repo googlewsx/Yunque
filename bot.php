@@ -59,8 +59,6 @@ function 被动锚点() {
     if ($msgId !== '') return ['msg_id' => $msgId];
     return [];
 }
-
-/** 解析当前事件对应的发送场景/目标 */
 function 当前场景(&$scene, &$target, &$anchor) {
     $source = 常量('消息来源', '未知');
     switch ($source) {
@@ -73,6 +71,8 @@ function 当前场景(&$scene, &$target, &$anchor) {
             break;
         case "加群":
         case "退群":
+        case "入群申请":
+        case "群事件":   // 新增这一行
             $scene = "群聊"; $target = 常量('来源', ''); $anchor = ['event_id' => 常量('事件ID', '')];
             break;
         case "互动":
@@ -87,7 +87,6 @@ function 当前场景(&$scene, &$target, &$anchor) {
             $scene = "未知"; $target = ''; $anchor = [];
     }
 }
-
 /** 通用消息发送（scene: 群聊/私聊；active 为 true 时走主动消息） */
 function 云雀API($scene, $target, $body, $active = false) {
     if ($target === '' || $scene === '未知') return json_encode(['code' => -1, 'message' => '无效发送目标'], JSON_UNESCAPED_UNICODE);
@@ -106,14 +105,25 @@ function 云雀API($scene, $target, $body, $active = false) {
     }
 
     $endpoint = $scene === "私聊" ? "/v2/users/{$target}/messages" : "/v2/groups/{$target}/messages";
-    return BOTAPI($endpoint, "POST", json_encode($body, JSON_UNESCAPED_UNICODE));
+    $result = BOTAPI($endpoint, "POST", json_encode($body, JSON_UNESCAPED_UNICODE));
+    // 发送成功后补记 message_id，供后台聊天界面撤回使用
+    $decoded = json_decode($result, true);
+    if (is_array($decoded) && (isset($decoded['message_id']) || isset($decoded['id']))) {
+        记录发送ID($decoded['message_id'] ?? $decoded['id'] ?? '');
+    }
+    return $result;
 }
 
 /** 当前上下文发送 */
 function 云雀发送($body, $active = false) {
     if (常量('消息来源') === '文字子频道') {
         $json = array_merge($body, ['msg_id' => 常量('消息ID', '')]);
-        return BOTAPI("/channels/" . 常量('来源') . "/messages", "POST", json_encode($json, JSON_UNESCAPED_UNICODE));
+        $result = BOTAPI("/channels/" . 常量('来源') . "/messages", "POST", json_encode($json, JSON_UNESCAPED_UNICODE));
+        $decoded = json_decode($result, true);
+        if (is_array($decoded) && (isset($decoded['message_id']) || isset($decoded['id']))) {
+            记录发送ID($decoded['message_id'] ?? $decoded['id'] ?? '');
+        }
+        return $result;
     }
     当前场景($scene, $target, $anchor);
     return 云雀API($scene, $target, $body, $active);
