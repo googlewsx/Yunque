@@ -176,6 +176,28 @@ function 记录发送($action, $target, $content, $type = "文字", $extra = [])
     wlog($rec, 'send');
 }
 
+/** 发送成功后，把接口返回的 message_id 补记到今天最后一条 send 日志（供撤回使用） */
+function 记录发送ID($messageId) {
+    $messageId = trim((string)$messageId);
+    if ($messageId === '') return;
+    $appid = defined('appid') ? appid : 'system';
+    $logFile = __DIR__ . "/Log/" . $appid . '/' . date('Y-m-d') . '.log';
+    if (!is_file($logFile)) return;
+    $lines = file($logFile, FILE_IGNORE_NEW_LINES);
+    if (!is_array($lines)) return;
+    for ($i = count($lines) - 1; $i >= 0; $i--) {
+        $line = trim($lines[$i]);
+        if (!preg_match('/^\[([^\]]+)\]\s*(.*)$/', $line, $m)) continue;
+        $d = json_decode($m[2], true);
+        if (!is_array($d) || ($d['kind'] ?? '') !== 'send') continue;
+        if (!empty($d['message_id'])) continue;
+        $d['message_id'] = $messageId;
+        $lines[$i] = '[' . $m[1] . '] ' . json_encode($d, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        @file_put_contents($logFile, implode(PHP_EOL, $lines) . PHP_EOL, LOCK_EX);
+        return;
+    }
+}
+
 /** 记录一次“收到”事件日志 */
 function 记录收到($raw, $extra = []) {
     $rec = array_merge([
@@ -425,25 +447,42 @@ function 云雀默认设置() {
         "处理自己消息" => false,   // 是否处理机器人自己发出的消息
         "仅群主可用" => false,     // 仅群主可触发插件
         "屏蔽其他机器人" => false, // 忽略其他机器人消息（不影响自己）
-        "自动去开头艾特" => true,  // 非艾特消息自动去掉开头的艾特机器人+空格
+        "自动去开头艾特" => true,  // 自动去掉开头艾特机器人（仅开头，不影响艾特其他人）
     ];
 }
 
-/** 读取某个机器人配置里的主人信息（无则返回 null） */
+/** 读取某个机器人配置里的主人列表（无则返回空数组） */
 function 云雀主人($appid = null) {
     $appid = $appid ?? (defined('appid') ? appid : '');
-    if ($appid === '') return null;
+    if ($appid === '') return [];
     $raw = @file_get_contents(__DIR__ . "/main.json");
     $main = json_decode($raw, true);
-    if (!is_array($main) || !isset($main[$appid]["主人"])) return null;
+    if (!is_array($main) || !isset($main[$appid]["主人"])) return [];
     $owner = $main[$appid]["主人"];
-    return is_array($owner) ? $owner : null;
+    if (!is_array($owner)) return [];
+    if (isset($owner['id']) || isset($owner['name'])) {
+        return [$owner];
+    }
+    return array_values(array_filter($owner, 'is_array'));
 }
 
-/** 当前机器人主人的 openid（插件可直接调用，空串表示未设置） */
+/** 当前机器人主人的 openid（插件可直接调用，取第一个主人；空串表示未设置） */
 function 主人ID($appid = null) {
-    $owner = 云雀主人($appid);
-    return ($owner && isset($owner['id'])) ? (string)$owner['id'] : '';
+    $owners = 云雀主人($appid);
+    foreach ($owners as $one) {
+        if (!empty($one['id'])) return (string)$one['id'];
+    }
+    return '';
+}
+
+/** 判断某个 openid 是否是机器人主人（支持多主人） */
+function 是否主人($openid, $appid = null) {
+    if ($openid === '' || $openid === null) return false;
+    foreach (云雀主人($appid) as $one) {
+        if (!empty($one['id']) && (string)$one['id'] === (string)$openid) return true;
+        if (!empty($one['qq_number']) && (string)$one['qq_number'] === (string)$openid) return true;
+    }
+    return false;
 }
 
 /** 当前机器人自身的 openid（插件可直接调用，需要已配置 secret） */
@@ -539,10 +578,69 @@ function 自身ID($appidArg = null, $secretArg = null) {
     return $id;
 }
 
+/**
+ * 判断字符串是否为 member_openid 格式（大写十六进制，通常32位）
+ */
+function 是成员openid格式($s) {
+    // member_openid 是大写十六进制（含字母A-F），AppID 是纯数字，以此区分
+    return is_string($s) && preg_match('/^[A-F0-9]{16,64}$/i', $s) && preg_match('/[A-F]/i', $s);
+}
+
+/**
+ * 缓存机器人在群内的 member_openid（框架层，收到@消息或发送响应时自动学习）
+ */
+function 缓存机器人成员ID($群号, $成员ID) {
+    $群号 = trim((string)$群号);
+    $成员ID = trim((string)$成员ID);
+    if ($群号 === '' || !是成员openid格式($成员ID)) return false;
+    $成员ID = strtoupper($成员ID);
+    写("群管/机器人身份/" . $群号, "member_openid", $成员ID);
+    写("群管/机器人身份/_global", "member_openid", $成员ID);
+    return true;
+}
+
+/**
+ * 获取机器人在指定群的 member_openid
+ * 优先群级缓存 → 全局缓存 → 回退 AppID
+ */
+function 获取机器人成员ID($群号 = '') {
+    if ($群号 !== '') {
+        $id = 读("群管/机器人身份/" . $群号, "member_openid", '');
+        if (是成员openid格式($id)) return strtoupper($id);
+    }
+    $id = 读("群管/机器人身份/_global", "member_openid", '');
+    if (是成员openid格式($id)) return strtoupper($id);
+    return defined('机器人ID') ? (string)机器人ID : (string)自身ID();
+}
+
 /** 解析时间（兼容 RFC3339 与 Y-m-d H:i:s） */
 function 解析时间($t) {
     if (empty($t)) return time();
     if (is_int($t)) return $t;
     $ts = strtotime($t);
     return $ts ? $ts : time();
+}
+
+// 添加至 function.php
+function 解析入群申请($verify_info) {
+    $result = ['问题' => '', '答案' => ''];
+    if (!is_array($verify_info)) return $result;
+
+    // 新格式：admin_review_qa
+    if (($verify_info['method'] ?? '') === 'admin_review_qa' && isset($verify_info['review_qa_list'][0])) {
+        $qa = $verify_info['review_qa_list'][0];
+        $result['问题'] = $qa['question'] ?? '';
+        $result['答案'] = $qa['answer'] ?? '';
+        return $result;
+    }
+
+    // 旧格式：verify_message
+    $raw = $verify_info['verify_message'] ?? '';
+    if (preg_match('/问题[：:](.+?)(?:\s*答案[：:](.+))?$/su', $raw, $m)) {
+        $result['问题'] = trim($m[1]);
+        $result['答案'] = isset($m[2]) ? trim($m[2]) : '';
+    } else {
+        $result['问题'] = $raw;
+    }
+    return $result;
 }

@@ -21,29 +21,13 @@
  * --------------------------------------------------------- */
 function BOTAPI($Address, $me, $json) {
     $urls = [
-        "正式" => "https://api.bot.qq.com",
-        "沙箱" => "https://sandbox.api.bot.qq.com",
-    ];
-    $fallback = [
         "正式" => "https://api.sgroup.qq.com",
         "沙箱" => "https://sandbox.api.sgroup.qq.com",
     ];
-    $type = 常量('type', '正式');
-    $host = isset($urls[$type]) ? $urls[$type] : $urls["正式"];
+    $host = isset($urls[常量('type', '正式')]) ? $urls[常量('type', '正式')] : $urls["正式"];
     $url = $host . $Address;
     $header = ["Authorization: QQBot " . BOT凭证(), 'Content-Type: application/json'];
-    $result = curl($url, $me, $header, $json);
-    // 新域名不可达（网络失败 / 404）时回退旧域名，兼容域名切换过渡期
-    $decoded = json_decode($result, true);
-    if (!is_array($decoded) || (isset($decoded['code']) && $decoded['code'] == -1)) {
-        $oldHost = isset($fallback[$type]) ? $fallback[$type] : $fallback["正式"];
-        $oldResult = curl($oldHost . $Address, $me, $header, $json);
-        $oldDecoded = json_decode($oldResult, true);
-        if (is_array($oldDecoded) && (!isset($oldDecoded['code']) || $oldDecoded['code'] != -1)) {
-            return $oldResult;
-        }
-    }
-    return $result;
+    return curl($url, $me, $header, $json);
 }
 
 /** 安全读取常量 */
@@ -59,6 +43,8 @@ function 被动锚点() {
     if ($msgId !== '') return ['msg_id' => $msgId];
     return [];
 }
+
+/** 解析当前事件对应的发送场景/目标 */
 function 当前场景(&$scene, &$target, &$anchor) {
     $source = 常量('消息来源', '未知');
     switch ($source) {
@@ -71,8 +57,8 @@ function 当前场景(&$scene, &$target, &$anchor) {
             break;
         case "加群":
         case "退群":
-        case "入群申请":
-        case "群事件":   // 新增这一行
+        case "成员入群":
+        case "成员退群":
             $scene = "群聊"; $target = 常量('来源', ''); $anchor = ['event_id' => 常量('事件ID', '')];
             break;
         case "互动":
@@ -87,6 +73,7 @@ function 当前场景(&$scene, &$target, &$anchor) {
             $scene = "未知"; $target = ''; $anchor = [];
     }
 }
+
 /** 通用消息发送（scene: 群聊/私聊；active 为 true 时走主动消息） */
 function 云雀API($scene, $target, $body, $active = false) {
     if ($target === '' || $scene === '未知') return json_encode(['code' => -1, 'message' => '无效发送目标'], JSON_UNESCAPED_UNICODE);
@@ -101,29 +88,51 @@ function 云雀API($scene, $target, $body, $active = false) {
     // 群聊被动回复内容加换行，避免被当作“斜杠命令”
     if (!$active && $scene === '群聊' && isset($body['content']) && is_string($body['content']) && $body['content'] !== ''
         && in_array($body['msg_type'] ?? -1, [0, 7], true) && $body['content'][0] !== "\n") {
-        $body['content'] = "\n" . $body['content'];
+        $body['content'] = " " . $body['content'];
     }
 
     $endpoint = $scene === "私聊" ? "/v2/users/{$target}/messages" : "/v2/groups/{$target}/messages";
-    $result = BOTAPI($endpoint, "POST", json_encode($body, JSON_UNESCAPED_UNICODE));
-    // 发送成功后补记 message_id，供后台聊天界面撤回使用
-    $decoded = json_decode($result, true);
-    if (is_array($decoded) && (isset($decoded['message_id']) || isset($decoded['id']))) {
-        记录发送ID($decoded['message_id'] ?? $decoded['id'] ?? '');
+    $response = BOTAPI($endpoint, "POST", json_encode($body, JSON_UNESCAPED_UNICODE));
+
+    // ---- 记录发送成功后的消息 ID（日志 + 群消息缓存 + 插件钩子）----
+    $decoded = json_decode($response, true);
+    if (is_array($decoded) && !empty($decoded['id'])) {
+        $msgId = (string)$decoded['id'];
+        // 补写发送日志（供后台展示）
+        记录发送ID($msgId);
+        // 全局变量，供插件调用 最后消息ID()
+        $GLOBALS['_yunque_last_msg_id'] = $msgId;
+        // 群聊消息：框架层记录 + 通知插件独立记录
+        if ($scene === '群聊') {
+            // 从发送响应中学习机器人在群内的 member_openid
+            foreach (['member_openid','id'] as $f) {
+                $aid = (string)($decoded['author'][$f] ?? '');
+                if (是成员openid格式($aid)) { 缓存机器人成员ID($target, $aid); break; }
+            }
+            $aid2 = (string)($decoded['member_openid'] ?? '');
+            if (是成员openid格式($aid2)) { 缓存机器人成员ID($target, $aid2); }
+            记录机器人消息($target, $msgId);
+            // 提取消息内容摘要供插件记录
+            $msgContent = 提取消息内容($body);
+            $msgTypeNum = isset($body['msg_type']) ? (int)$body['msg_type'] : 0;
+            // 插件钩子：插件可定义 机器人消息钩子() 独立记录机器人自己的消息
+            if (function_exists('机器人消息钩子')) {
+                try {
+                    机器人消息钩子($target, $msgId, $msgContent, $msgTypeNum, time());
+                } catch (Throwable $e) {
+                    // 钩子异常不影响消息发送
+                }
+            }
+        }
     }
-    return $result;
+    return $response;
 }
 
 /** 当前上下文发送 */
 function 云雀发送($body, $active = false) {
     if (常量('消息来源') === '文字子频道') {
         $json = array_merge($body, ['msg_id' => 常量('消息ID', '')]);
-        $result = BOTAPI("/channels/" . 常量('来源') . "/messages", "POST", json_encode($json, JSON_UNESCAPED_UNICODE));
-        $decoded = json_decode($result, true);
-        if (is_array($decoded) && (isset($decoded['message_id']) || isset($decoded['id']))) {
-            记录发送ID($decoded['message_id'] ?? $decoded['id'] ?? '');
-        }
-        return $result;
+        return BOTAPI("/channels/" . 常量('来源') . "/messages", "POST", json_encode($json, JSON_UNESCAPED_UNICODE));
     }
     当前场景($scene, $target, $anchor);
     return 云雀API($scene, $target, $body, $active);
@@ -743,3 +752,73 @@ function qq_is_admin($uid = null) { return 管理员($uid); }
 function qq_is_member($uid = null) { return 群员($uid); }
 function qq_is_bot($uid = null) { return 是机器人($uid); }
 function qq_member_info($group, $uid) { return 群成员($uid, $group); }
+
+/* ------------------------------------------------------------
+ * 新增辅助函数：获取最近一次发送的消息 ID（同一请求内）
+ * --------------------------------------------------------- */
+/**
+ * 从发送 body 中提取消息内容摘要
+ * @param array $body 云雀API 的 body 参数
+ * @return string
+ */
+function 提取消息内容($body) {
+    $msgType = isset($body['msg_type']) ? (int)$body['msg_type'] : 0;
+    if ($msgType === 2) {
+        // Markdown 消息
+        if (isset($body['markdown']['content'])) {
+            return (string)$body['markdown']['content'];
+        }
+        if (isset($body['markdown']['custom_template_id'])) {
+            return '[MD模板: ' . $body['markdown']['custom_template_id'] . ']';
+        }
+        return '[Markdown消息]';
+    }
+    if ($msgType === 7) {
+        // 富媒体消息
+        $content = isset($body['content']) ? trim((string)$body['content']) : '';
+        return $content !== '' ? $content : '[富媒体消息]';
+    }
+    // 文字消息（msg_type=0）或其他
+    return isset($body['content']) ? (string)$body['content'] : '';
+}
+
+/**
+ * 把机器人自己发送成功的消息 ID 写入群消息缓存（框架层）
+ * 缓存位置：database/群管/消息缓存/{群号}，键为机器人在群内的 member_openid
+ * 供群管系统"撤回 @机器人"命令读取
+ * @param string $群号    群 openid
+ * @param string $消息ID  发送接口返回的消息 id
+ */
+function 记录机器人消息($群号, $消息ID) {
+    $群号 = trim((string)$群号);
+    $消息ID = trim((string)$消息ID);
+    if ($群号 === '' || $消息ID === '') return;
+
+    // 优先使用机器人在群内的 member_openid（与@消息中的 openid 一致）
+    $botId = 获取机器人成员ID($群号);
+    if ($botId === '') return;
+
+    $缓存键 = "群管/消息缓存/" . $群号;
+    $缓存文件路径 = __DIR__ . "/database/" . $缓存键;
+
+    // 与群管系统保持一致：缓存文件超过 120 秒无写入则整体清空（2 分钟撤回窗口）
+    if (is_file($缓存文件路径) && time() - filemtime($缓存文件路径) > 120) {
+        @file_put_contents($缓存文件路径, '{}');
+    }
+
+    $列表 = 读($缓存键, $botId, []);
+    if (!is_array($列表)) $列表 = [];
+    // 防止重复记录
+    if (!empty($列表) && $列表[0] === $消息ID) return;
+    array_unshift($列表, $消息ID);
+    $列表 = array_slice($列表, 0, 30);
+    写($缓存键, $botId, $列表);
+}
+
+/**
+ * 获取最近一次通过云雀发送的消息 ID（同一请求内有效）
+ * @return string|null
+ */
+function 最后消息ID() {
+    return $GLOBALS['_yunque_last_msg_id'] ?? null;
+}

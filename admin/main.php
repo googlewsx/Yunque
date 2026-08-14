@@ -438,6 +438,73 @@ if (!isset($_COOKIE['admin_token'])) {
             margin-bottom: 6px;
         }
 
+        /* iOS 风开关 */
+        .switch-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 14px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            margin-bottom: 8px;
+            background: rgba(255,255,255,.7);
+            cursor: pointer;
+            transition: background .15s;
+        }
+        .switch-row:hover { background: rgba(255,255,255,.9); }
+        .switch-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+        .switch-title { display: block; font-size: 14px; font-weight: 600; color: var(--text-main); }
+        .switch-desc { display: block; font-size: 12px; color: var(--text-muted); margin-top: 2px; line-height: 1.4; word-break: break-word; }
+        .switch-toggle {
+            position: relative;
+            display: inline-block;
+            width: 46px;
+            height: 26px;
+            flex-shrink: 0;
+        }
+        .switch-toggle input { opacity: 0; width: 0; height: 0; position: absolute; -webkit-appearance: none; appearance: none; }
+        .switch-slider {
+            position: absolute;
+            top: 0; right: 0; bottom: 0; left: 0;
+            background: #d1d5db;
+            border-radius: 26px;
+            transition: background .2s;
+            cursor: pointer;
+            z-index: 1;
+        }
+        .switch-slider::before {
+            content: '';
+            position: absolute;
+            left: 3px; top: 3px;
+            width: 20px; height: 20px;
+            background: #fff;
+            border-radius: 50%;
+            box-shadow: 0 1px 3px rgba(0,0,0,.2);
+            transition: transform .2s;
+            z-index: 2;
+        }
+        .switch-toggle input:checked + .switch-slider { background: var(--primary); }
+        .switch-toggle input:checked + .switch-slider::before { transform: translateX(20px); }
+        .switch-badge {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 10px;
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+        .switch-badge.on { background: #dcfce7; color: #16a34a; }
+        .switch-badge.off { background: #f3f4f6; color: #9ca3af; }
+
+        /* 主人列表 */
+        .owner-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+            align-items: center;
+        }
+        .owner-row .form-control { flex: 1; min-width: 0; }
+
         .form-control, .form-select {
             width: 100%;
             padding: 8px 12px;
@@ -451,6 +518,38 @@ if (!isset($_COOKIE['admin_token'])) {
             outline: none;
             border-color: var(--primary);
         }
+
+        /* 机器人设置内嵌面板 */
+        .bot-settings-panel {
+            display: none;
+            border-top: 1px solid var(--border);
+            margin-top: 12px;
+            padding-top: 12px;
+        }
+        .bot-settings-panel.open {
+            display: block;
+        }
+        .settings-panel-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+        .settings-panel-time {
+            font-size: 11px;
+            font-weight: 400;
+            color: var(--text-muted);
+        }
+        .settings-panel-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 4px;
+            flex-wrap: wrap;
+        }
+        .settings-panel-actions .btn { flex: 1; justify-content: center; }
 
         /* 移动端适配 */
         .mobile-header {
@@ -720,38 +819,6 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.main-content::-webkit-scrollbar
 
     <div id="notification" class="notification"></div>
 
-    <!-- 机器人设置模态框：开关 + 主人 -->
-    <div class="modal" id="settingsModal">
-        <div class="modal-content" style="max-width:560px;">
-            <div class="modal-header">
-                <h3><i class="fas fa-sliders-h"></i> 机器人设置</h3>
-                <button class="close-btn" data-close="settingsModal">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="form-group"><label>机器人 AppID</label><input type="text" class="form-control" id="setAppid" readonly></div>
-                <div class="form-group">
-                    <label>主人（可从日志中遍历选择，或手动输入 openid）</label>
-                    <div style="display:flex;gap:8px;">
-                        <input type="text" class="form-control" id="ownerId" placeholder="主人 openid">
-                        <button class="btn btn-secondary btn-sm" id="clearOwnerBtn" type="button">清空</button>
-                    </div>
-                    <select class="form-select" id="ownerSelect" style="margin-top:8px;">
-                        <option value="">— 从日志选择主人 —</option>
-                    </select>
-                    <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">群聊/私聊用户从该机器人的日志中自动汇总，按最近活跃排序。</div>
-                </div>
-                <div class="form-group">
-                    <label>功能开关</label>
-                    <div id="switchList"></div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" data-close="settingsModal">取消</button>
-                <button class="btn btn-primary" id="saveSettingsBtn"><i class="fas fa-save"></i> 保存设置</button>
-            </div>
-        </div>
-    </div>
-
     <script>
         let currentBots = [];
         let deleteTargetAppid = null;
@@ -799,7 +866,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.main-content::-webkit-scrollbar
 
         async function fetchBots() {
             try {
-                const res = await fetch('api/info.php?type=list');
+                const res = await fetch('api/info.php?type=list&_t=' + Date.now(), {cache: 'no-store'});
                 const data = await res.json();
                 currentBots = Array.isArray(data) ? data : [];
                 renderStats();
@@ -854,6 +921,33 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.main-content::-webkit-scrollbar
                         <a href="chat.php?appid=${encodeURIComponent(bot.appid)}" class="btn btn-secondary btn-sm"><i class="fas fa-comments"></i> 聊天</a>
                         <button class="btn btn-danger btn-sm delete-bot" data-appid="${escapeHtml(bot.appid)}"><i class="fas fa-trash"></i> 删除</button>
                     </div>
+                    <div class="bot-settings-panel" id="settingsPanel_${escapeHtml(bot.appid)}">
+                        <div class="settings-panel-head">
+                            <span><i class="fas fa-sliders-h"></i> 机器人设置</span>
+                            <span class="settings-panel-time"></span>
+                        </div>
+                        <div class="form-group"><label>机器人 AppID</label><input type="text" class="form-control settings-appid" readonly value="${escapeHtml(bot.appid)}"></div>
+                        <div class="form-group">
+                            <label>主人（可从日志中遍历选择，或手动输入 openid，支持多人）</label>
+                            <div class="owner-list"></div>
+                            <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+                                <button class="btn btn-secondary btn-sm add-owner-btn" type="button" style="flex-shrink:0;"><i class="fas fa-plus"></i> 添加主人</button>
+                                <select class="form-select owner-select" style="flex:1;min-width:160px;">
+                                    <option value="">— 从日志选择主人（添加到列表） —</option>
+                                </select>
+                            </div>
+                            <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">群聊/私聊用户从该机器人的日志中自动汇总，按最近活跃排序。</div>
+                        </div>
+                        <div class="form-group">
+                            <label>功能开关</label>
+                            <div class="switch-list"></div>
+                        </div>
+                        <div class="settings-panel-actions">
+                            <button class="btn btn-primary btn-sm save-owner-btn" type="button"><i class="fas fa-user-cog"></i> 保存主人</button>
+                            <button class="btn btn-primary btn-sm save-settings-btn" type="button"><i class="fas fa-save"></i> 保存开关</button>
+                            <button class="btn btn-secondary btn-sm settings-refresh-btn" type="button"><i class="fas fa-sync-alt"></i> 刷新</button>
+                        </div>
+                    </div>
                 </div>
             `).join('');
 
@@ -861,7 +955,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.main-content::-webkit-scrollbar
             document.querySelectorAll('.bot-settings').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    openSettingsModal(btn.dataset.appid);
+                    toggleSettingsPanel(btn.dataset.appid);
                 });
             });
             // 绑定删除按钮事件
@@ -878,7 +972,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.main-content::-webkit-scrollbar
         document.getElementById('confirmDeleteBtn').addEventListener('click', async () => {
             if (!deleteTargetAppid) return;
             try {
-                const res = await fetch(`api/bot.php?type=del&appid=${encodeURIComponent(deleteTargetAppid)}`);
+                const res = await fetch(`api/bot.php?type=del&appid=${encodeURIComponent(deleteTargetAppid)}`, {cache: 'no-store'});
                 const data = await res.json();
                 if (data.code === 200) {
                     showMsg('删除成功', true);
@@ -893,7 +987,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.main-content::-webkit-scrollbar
             deleteTargetAppid = null;
         });
 
-        /* ---------- 机器人设置（开关 + 主人） ---------- */
+        /* ---------- 机器人设置（内嵌面板：实时读取 + 实时刷新） ---------- */
         const SETTING_SWITCHES = [
             ['群非艾特', '接收群内非艾特消息'],
             ['排除机器人', '忽略所有机器人账号消息'],
@@ -901,87 +995,224 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.main-content::-webkit-scrollbar
             ['处理自己消息', '处理机器人自己发出的消息'],
             ['仅群主可用', '仅群主可触发插件'],
             ['屏蔽其他机器人', '忽略其他机器人消息（不影响自己）'],
-            ['自动去开头艾特', '非艾特消息自动去掉开头艾特机器人+空格'],
+            ['自动去开头艾特', '自动去掉开头艾特机器人（不影响艾特其他人）'],
         ];
-        let settingsAppid = '';
-        let settingsUsers = [];
-        let settingsOwnerName = '';
+        const settingsTimers = {};
 
-        function renderSwitchList(settings) {
-            const box = document.getElementById('switchList');
+        function stopSettingsTimer(appid) {
+            if (settingsTimers[appid]) {
+                clearInterval(settingsTimers[appid]);
+                delete settingsTimers[appid];
+            }
+        }
+
+        function renderSwitchList(panel, settings) {
+            const box = panel.querySelector('.switch-list');
+            const defaults = {};
+            SETTING_SWITCHES.forEach(([key]) => defaults[key] = true);
+            defaults['处理自己消息'] = false;
+            defaults['仅群主可用'] = false;
+            defaults['屏蔽其他机器人'] = false;
+            const merged = Object.assign({}, defaults, settings || {});
             box.innerHTML = SETTING_SWITCHES.map(([key, desc]) => {
-                const on = settings[key] !== false;
-                return `<label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;cursor:pointer;background:white;">
-                    <input type="checkbox" data-key="${key}" ${on ? 'checked' : ''} style="accent-color:var(--primary);">
-                    <span style="flex:1;font-size:13px;"><span style="font-weight:500;color:var(--text-main);">${escapeHtml(key)}</span><br><span style="font-size:11px;color:var(--text-muted);">${escapeHtml(desc)}</span></span>
+                const on = merged[key] === true;
+                return `<label class="switch-row">
+                    <span class="switch-info">
+                        <span class="switch-title">${escapeHtml(key)}</span>
+                        <span class="switch-desc">${escapeHtml(desc)}</span>
+                    </span>
+                    <span class="switch-badge ${on ? 'on' : 'off'}">${on ? '已开启' : '已关闭'}</span>
+                    <span class="switch-toggle">
+                        <input type="checkbox" data-key="${key}" ${on ? 'checked' : ''}>
+                        <span class="switch-slider"></span>
+                    </span>
                 </label>`;
             }).join('');
         }
 
-        async function openSettingsModal(appid) {
-            settingsAppid = appid;
-            settingsOwnerName = '';
-            document.getElementById('setAppid').value = appid;
-            const ownerId = document.getElementById('ownerId');
-            const ownerSelect = document.getElementById('ownerSelect');
-            ownerId.value = '';
-            ownerSelect.innerHTML = '<option value="">— 从日志选择主人 —</option>';
-            ownerSelect.disabled = true;
+        function renderOwnerList(panel) {
+            const box = panel.querySelector('.owner-list');
+            const owners = panel._owners || [];
+            if (!owners.length) {
+                box.innerHTML = '<div style="font-size:13px;color:var(--text-muted);padding:8px 0;">暂无主人，点击下方按钮添加</div>';
+                return;
+            }
+            box.innerHTML = '';
+            owners.forEach((o) => {
+                const row = document.createElement('div');
+                row.className = 'owner-row';
+                row.innerHTML = `
+                    <input type="hidden" class="owner-remark" value="${escapeHtml(o.remark || '')}">
+                    <input type="text" class="form-control owner-openid" placeholder="主人 openid / QQ" value="${escapeHtml(o.id || o.qq_number || '')}">
+                    <input type="text" class="form-control owner-name" placeholder="名称（选填）" value="${escapeHtml(o.name || '')}">
+                    <button class="btn btn-secondary btn-sm owner-del" type="button">移除</button>`;
+                box.appendChild(row);
+            });
+        }
 
-            // 读取当前机器人配置（含默认开关、当前主人）
+        function collectOwners(panel) {
+            const rows = panel.querySelectorAll('.owner-list .owner-openid');
+            const names = panel.querySelectorAll('.owner-list .owner-name');
+            const remarks = panel.querySelectorAll('.owner-list .owner-remark');
+            const list = [];
+            rows.forEach((r, i) => {
+                const val = r.value.trim();
+                if (!val) return;
+                const name = (names[i] || {}).value ? names[i].value.trim() : '';
+                const remark = (remarks[i] || {}).value ? remarks[i].value.trim() : '';
+                if (/^\d{5,12}$/.test(val)) {
+                    list.push({ id: '', qq_number: val, name: name, remark: remark });
+                } else {
+                    list.push({ id: val, qq_number: '', name: name, remark: remark });
+                }
+            });
+            return list;
+        }
+
+        // 实时读取：拉取该机器人的最新配置并渲染面板
+        async function loadSettingsPanel(panel, appid) {
             let settings = {};
             try {
-                const res = await fetch('api/bot.php?type=list');
+                const res = await fetch('api/bot.php?type=list&_t=' + Date.now(), {cache: 'no-store'});
                 const data = await res.json();
                 const bot = (data.list || []).find(b => b.appid === appid);
                 if (bot) {
                     settings = bot.settings || {};
-                    const owner = bot.主人 || {};
-                    if (owner.id) { ownerId.value = owner.id; settingsOwnerName = owner.name || ''; }
+                    const owner = bot.主人;
+                    if (Array.isArray(owner)) {
+                        panel._owners = owner.filter(o => o && (o.id || o.qq_number || o.name));
+                    } else if (owner && (owner.id || owner.qq_number)) {
+                        panel._owners = [{ id: owner.id || '', qq_number: owner.qq_number || '', name: owner.name || '', remark: owner.remark || '' }];
+                    } else {
+                        panel._owners = [];
+                    }
                 }
             } catch (e) {}
-            renderSwitchList(settings);
+            renderSwitchList(panel, settings);
+            const editing = panel.contains(document.activeElement) && document.activeElement.matches('.owner-openid, .owner-name');
+            if (!editing) renderOwnerList(panel);
 
-            // 从日志加载用户列表（用于选主人）
+            const ownerSelect = panel.querySelector('.owner-select');
             try {
-                const u = await fetch(`api/bot.php?type=users&appid=${encodeURIComponent(appid)}`);
+                const u = await fetch(`api/bot.php?type=users&appid=${encodeURIComponent(appid)}&_t=${Date.now()}`, {cache: 'no-store'});
                 const ud = await u.json();
-                settingsUsers = (ud.code === 200 && Array.isArray(ud.users)) ? ud.users : [];
-                ownerSelect.innerHTML = '<option value="">— 从日志选择主人 —</option>' +
-                    settingsUsers.map(x => `<option value="${escapeHtml(x.id)}">${escapeHtml(x.username || x.id)}${x.id !== (x.username || '') ? ' · ' + escapeHtml(x.id.slice(-6)) : ''} · ${escapeHtml(x.last_time || '')}</option>`).join('');
-                ownerSelect.disabled = !settingsUsers.length;
+                panel._users = (ud.code === 200 && Array.isArray(ud.users)) ? ud.users : [];
+                ownerSelect.innerHTML = '<option value="">— 从日志选择主人（添加到列表） —</option>' +
+                    panel._users.map(x => `<option value="${escapeHtml(x.id)}">${escapeHtml(x.username || x.id)}${x.id !== (x.username || '') ? ' · ' + escapeHtml(x.id.slice(-6)) : ''} · ${escapeHtml(x.last_time || '')}</option>`).join('');
+                ownerSelect.disabled = !panel._users.length;
             } catch (e) { ownerSelect.disabled = true; }
 
-            document.getElementById('settingsModal').style.display = 'flex';
+            const timeEl = panel.querySelector('.settings-panel-time');
+            if (timeEl) timeEl.textContent = '最近刷新：' + new Date().toLocaleTimeString();
         }
 
-        document.getElementById('ownerSelect').addEventListener('change', (e) => {
-            const v = e.target.value;
-            if (!v) return;
-            const user = settingsUsers.find(x => x.id === v);
-            if (user) { settingsOwnerName = user.username || ''; }
-            document.getElementById('ownerId').value = v;
-        });
-
-        document.getElementById('clearOwnerBtn').addEventListener('click', () => {
-            document.getElementById('ownerId').value = '';
-            settingsOwnerName = '';
-        });
-
-        document.getElementById('saveSettingsBtn').addEventListener('click', async () => {
-            if (!settingsAppid) return;
-            const settings = {};
-            document.querySelectorAll('#switchList input[type=checkbox]').forEach(cb => {
-                settings[cb.dataset.key] = cb.checked;
+        // 切换内嵌设置面板的展开/收起
+        async function toggleSettingsPanel(appid) {
+            const panel = document.getElementById('settingsPanel_' + appid);
+            if (!panel) return;
+            if (panel.style.display === 'block') {
+                panel.style.display = 'none';
+                stopSettingsTimer(appid);
+                return;
+            }
+            document.querySelectorAll('.bot-settings-panel').forEach(p => {
+                if (p !== panel && p.style.display === 'block') {
+                    p.style.display = 'none';
+                    stopSettingsTimer(p.id.replace('settingsPanel_', ''));
+                }
             });
-            const ownerIdVal = document.getElementById('ownerId').value.trim();
-            const owner = { id: ownerIdVal, name: settingsOwnerName };
+            panel.style.display = 'block';
+            panel._owners = [];
+            panel._users = [];
+            await loadSettingsPanel(panel, appid);
+            stopSettingsTimer(appid);
+            settingsTimers[appid] = setInterval(() => {
+                if (panel.style.display !== 'block' || !document.body.contains(panel)) {
+                    stopSettingsTimer(appid);
+                    return;
+                }
+                loadSettingsPanel(panel, appid);
+            }, 3000);
+        }
+
+        async function saveOwnerPanel(panel) {
+            const appid = panel.querySelector('.settings-appid').value.trim();
+            const owners = collectOwners(panel);
+            const params = new URLSearchParams();
+            params.set('type', 'update');
+            params.set('appid', appid);
+            params.set('主人', JSON.stringify(owners));
             try {
-                const res = await fetch(`api/bot.php?type=update&appid=${encodeURIComponent(settingsAppid)}&settings=${encodeURIComponent(JSON.stringify(settings))}&主人=${encodeURIComponent(JSON.stringify(owner))}`);
+                const res = await fetch('api/bot.php?' + params.toString(), {cache: 'no-store'});
                 const data = await res.json();
-                if (data.code === 200) { showMsg('设置已保存', true); closeModal('settingsModal'); }
+                if (data.code === 200) { showMsg('主人已保存', true); loadSettingsPanel(panel, appid); }
                 else showMsg(data.msg || '保存失败', false);
             } catch (err) { showMsg('保存失败', false); }
+        }
+
+        async function saveSettingsPanel(panel) {
+            const appid = panel.querySelector('.settings-appid').value.trim();
+            const settings = {};
+            panel.querySelectorAll('.switch-list input[type=checkbox]').forEach(cb => {
+                settings[cb.dataset.key] = cb.checked;
+            });
+            const params = new URLSearchParams();
+            params.set('type', 'update');
+            params.set('appid', appid);
+            params.set('settings', JSON.stringify(settings));
+            try {
+                const res = await fetch('api/bot.php?' + params.toString(), {cache: 'no-store'});
+                const data = await res.json();
+                if (data.code === 200) { showMsg('开关已保存', true); loadSettingsPanel(panel, appid); }
+                else showMsg(data.msg || '保存失败', false);
+            } catch (err) { showMsg('保存失败', false); }
+        }
+
+        // 内嵌面板事件：委托到面板区域
+        document.addEventListener('click', (e) => {
+            const panel = e.target.closest('.bot-settings-panel');
+            if (!panel) return;
+            if (e.target.closest('.add-owner-btn')) {
+                panel._owners.push({ id: '', qq_number: '', name: '', remark: '' });
+                renderOwnerList(panel);
+            } else if (e.target.closest('.owner-del')) {
+                const rows = Array.from(panel.querySelectorAll('.owner-list .owner-row'));
+                const idx = rows.indexOf(e.target.closest('.owner-row'));
+                if (idx >= 0) { panel._owners.splice(idx, 1); renderOwnerList(panel); }
+            } else if (e.target.closest('.save-owner-btn')) {
+                saveOwnerPanel(panel);
+            } else if (e.target.closest('.save-settings-btn')) {
+                saveSettingsPanel(panel);
+            } else if (e.target.closest('.settings-refresh-btn')) {
+                loadSettingsPanel(panel, panel.querySelector('.settings-appid').value.trim());
+            }
+        });
+
+        document.addEventListener('change', (e) => {
+            const panel = e.target.closest('.bot-settings-panel');
+            if (!panel) return;
+            if (e.target.matches('.owner-select')) {
+                const v = e.target.value;
+                if (!v) return;
+                const user = (panel._users || []).find(x => x.id === v);
+                panel._owners.push({ id: v, qq_number: '', name: (user && user.username) || '', remark: '' });
+                renderOwnerList(panel);
+                e.target.value = '';
+            } else if (e.target.matches('.switch-toggle input')) {
+                const row = e.target.closest('.switch-row');
+                const badge = row.querySelector('.switch-badge');
+                if (e.target.checked) {
+                    badge.textContent = '已开启';
+                    badge.className = 'switch-badge on';
+                } else {
+                    badge.textContent = '已关闭';
+                    badge.className = 'switch-badge off';
+                }
+                saveSettingsPanel(panel);
+            } else if (e.target.matches('.owner-openid') || e.target.matches('.owner-name')) {
+                clearTimeout(panel._saveTimer);
+                panel._saveTimer = setTimeout(() => saveOwnerPanel(panel), 400);
+            }
         });
 
         // 添加机器人
@@ -995,7 +1226,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.main-content::-webkit-scrollbar
                 return;
             }
             try {
-                const res = await fetch(`api/bot.php?type=add&appid=${encodeURIComponent(appid)}&secret=${encodeURIComponent(secret)}&environment=${encodeURIComponent(env)}`);
+                const res = await fetch(`api/bot.php?type=add&appid=${encodeURIComponent(appid)}&secret=${encodeURIComponent(secret)}&environment=${encodeURIComponent(env)}`, {cache: 'no-store'});
                 const data = await res.json();
                 if (data.code === 200) {
                     showMsg('添加成功', true);

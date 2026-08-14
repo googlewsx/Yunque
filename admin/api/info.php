@@ -1,4 +1,8 @@
 <?php
+header('Content-Type: application/json');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 $file = dirname(__DIR__,2)."/main.json";
 $type = $_REQUEST["type"] ?? "";
 
@@ -61,9 +65,11 @@ $添加 = 0;
                         $私聊++;
                         break;
                     case "GROUP_ADD_ROBOT":
+                    case "GROUP_MEMBER_ADD":
                         $加群++;
                         break;
                     case "GROUP_DEL_ROBOT":
+                    case "GROUP_MEMBER_REMOVE":
                         $退群++;
                         break;
                     case "FRIEND_ADD":

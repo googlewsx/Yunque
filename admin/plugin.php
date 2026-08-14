@@ -424,7 +424,7 @@ body{position:relative;min-height:100%;}
                 </div>
                 <div class="form-group" id="scopeGroupsWrap">
                     <label>指定生效的群（从日志中遍历选择）</label>
-                    <input type="text" class="form-control" id="scopeSearch" placeholder="搜索群 openid…">
+                    <input type="text" class="form-control" id="scopeSearch" placeholder="搜索群名…">
                     <div id="scopeGroups" style="margin-top:8px;display:grid;gap:6px;max-height:42vh;overflow:auto;"></div>
                 </div>
             </div>
@@ -604,6 +604,7 @@ body{position:relative;min-height:100%;}
         async function openScopeModal(plugin) {
             scopePlugin = plugin;
             scopeSelectedGroups = new Set();
+            scopeNameLoading.clear();
             document.getElementById('scopePluginName').value = plugin;
             document.getElementById('scopeMode').value = 'all';
             document.getElementById('scopeSearch').value = '';
@@ -628,23 +629,58 @@ body{position:relative;min-height:100%;}
         function renderScopeGroups() {
             const kw = document.getElementById('scopeSearch').value.trim().toLowerCase();
             const box = document.getElementById('scopeGroups');
-            const list = scopeGroupsData.filter(g => !kw || String(g.id).toLowerCase().includes(kw) || String(g.last_time || '').includes(kw));
+            const list = scopeGroupsData.filter(g => {
+                if (!kw) return true;
+                const name = (g.name || '').toLowerCase();
+                const id = String(g.id).toLowerCase();
+                return name.includes(kw) || id.includes(kw);
+            });
             if (!list.length) {
                 box.innerHTML = '<div class="empty-state">暂无群记录（需要先有群聊日志）</div>';
                 return;
             }
             box.innerHTML = list.map(g => {
                 const checked = scopeSelectedGroups.has(g.id) ? 'checked' : '';
+                const displayName = g.name ? escapeHtml(g.name) : '<span style="color:var(--text-muted)">加载群名中…</span>';
                 return `<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:white;">
                     <input type="checkbox" value="${escapeHtml(g.id)}" ${checked}>
-                    <span style="font-size:12px;word-break:break-all;flex:1;">${escapeHtml(g.id)}</span>
-                    <span style="font-size:10px;color:var(--text-muted);white-space:nowrap;">${escapeHtml(g.last_time)}</span>
+                    <span style="flex:1;min-width:0;">
+                        <span style="display:block;font-size:13px;font-weight:500;word-break:break-word;" data-gid="${escapeHtml(g.id)}">${displayName}</span>
+                        <span style="display:block;font-size:10px;color:var(--text-muted);margin-top:2px;">${escapeHtml(g.last_time)}</span>
+                    </span>
                 </label>`;
             }).join('');
             box.querySelectorAll('input[type=checkbox]').forEach(cb => {
                 cb.addEventListener('change', () => {
                     if (cb.checked) scopeSelectedGroups.add(cb.value); else scopeSelectedGroups.delete(cb.value);
                 });
+            });
+            loadMissingGroupNames();
+        }
+
+        const scopeNameLoading = new Set();
+        function loadMissingGroupNames() {
+            scopeGroupsData.forEach(g => {
+                if (g.name || scopeNameLoading.has(g.id)) return;
+                scopeNameLoading.add(g.id);
+                fetch(`api/chat.php?type=group_name&appid=${encodeURIComponent(appid)}&group_id=${encodeURIComponent(g.id)}`)
+                    .then(r => r.json())
+                    .then(d => {
+                        if (d.code === 200 && d.name) {
+                            g.name = d.name;
+                            const el = document.querySelector(`#scopeGroups [data-gid="${CSS.escape(g.id)}"]`);
+                            if (el) el.textContent = d.name;
+                        } else {
+                            g.name = g.id;
+                            const el = document.querySelector(`#scopeGroups [data-gid="${CSS.escape(g.id)}"]`);
+                            if (el) { el.textContent = g.id; el.style.color = 'var(--text-muted)'; }
+                        }
+                    })
+                    .catch(() => {
+                        g.name = g.id;
+                        const el = document.querySelector(`#scopeGroups [data-gid="${CSS.escape(g.id)}"]`);
+                        if (el) { el.textContent = g.id; el.style.color = 'var(--text-muted)'; }
+                    });
             });
         }
 

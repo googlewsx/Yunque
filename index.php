@@ -6,27 +6,9 @@
  *  统一处理：
  *   - 腾讯官方事件回调（WebSocket 推送上来的 HTTP 透传）
  *   - op=13 事件 URL 验证 / op=0 事件分发与去重
- *   - 群艾特、群非艾特、私聊、频道、加群、退群、按钮互动
+ *   - 群艾特、群非艾特、私聊、加群、退群、按钮互动
  *   - 按机器人设置过滤：排除机器人 / 处理自己消息 / 自动去艾特 / 仅群主可用
  *   - 兼容旧版“代发”入口
- *
- *  事件分发矩阵（对照 QQ 开放平台官方文档）：
- *   群聊  GROUP_AT_MESSAGE_CREATE 群内 @机器人消息（被动 msg_id 锚点）
- *   群聊  GROUP_MESSAGE_CREATE    群内全量消息（需申请群消息接收权限）
- *   单聊  C2C_MESSAGE_CREATE      单聊消息（被动 msg_id 锚点）
- *   频道  AT_MESSAGE_CREATE       频道内 @机器人消息
- *   频道  MESSAGE_CREATE          频道内全量消息
- *   频道  DIRECT_MESSAGE_CREATE   频道私信（回复走 /channels/{id}/messages）
- *   群聊  GROUP_ADD_ROBOT         机器人被拉入群（事件类，以 event_id 为锚点回复）
- *   群聊  GROUP_DEL_ROBOT         机器人被移出群
- *   群聊  GROUP_JOIN_REQUEST      入群申请（需开启对应权限，以 event_id 为锚点回复）
- *   互动  INTERACTION_CREATE      按钮/菜单回调（需快速 ACK + PUT 互动回应）
- *   管理  *_DELETE / *_REJECT / *_AUDIT / *_REACTION / *_EMOJI 等：记录不处理
- *
- *  被动回复规则（官方限制，发送函数内不重复处理）：
- *   - 群聊每条消息 5 分钟内最多回复 5 次；单聊 60 分钟内最多 4 次
- *   - 消息类事件用 msg_id 锚点，事件类（加群/退群/互动）用 event_id 锚点
- *   - 主动消息需用户开启“允许主动发送”，群聊主动消息需机器人具备权限
  * ============================================================
  */
 ob_start();
@@ -211,236 +193,164 @@ function initAppContext(string $appidVal, array $cfg)
     }
 }
 
+/**
+ * 事件分发主入口：定义插件常量 → 按设置过滤 → 加载插件。
+ */
 function Main($raw)
 {
     $event = $raw["t"] ?? '';
     $d = $raw["d"] ?? [];
+    define("事件类型", $event);
 
-    // 定义事件类型常量（供插件识别）
-    if (!defined('事件类型')) define('事件类型', $event);
-
-    $isMessageEvent = false;          // 是否为可回复的消息类事件
-    $msgSource = '';                  // 消息来源（群聊/私聊/频道等）
-    $source = '';                     // 来源标识（群ID/频道ID/用户ID）
-    $user = '';                       // 操作者ID
-    $msgId = $d["id"] ?? '';          // 消息ID（事件数据中的消息id）
-    $eventId = $raw["id"] ?? '';      // 事件ID（顶层id）
-    $me = 自身ID();                   // 机器人自身ID（缓存1小时）
-
-    // ========== 事件分发矩阵（覆盖全部53种） ==========
+    // 不同事件的消息字段兼容官方两种事件命名
     switch ($event) {
-        // ---- 消息类事件（可回复） ----
         case "GROUP_AT_MESSAGE_CREATE":
         case "GROUP_MESSAGE_CREATE":
-            $isMessageEvent = true;
-            $msgSource = "群聊";
-            $source = $d["group_openid"] ?? $d["group_id"] ?? '';
-            $user = $d["author"]["id"] ?? $d["author"]["member_openid"] ?? '';
+            define("消息来源", "群聊");
+            define("消息ID", $d["id"] ?? '');
+            define("来源", $d["group_openid"] ?? $d["group_id"] ?? '');
+            define("用户", $d["author"]["id"] ?? $d["author"]["member_openid"] ?? '');
             break;
 
         case "C2C_MESSAGE_CREATE":
-            $isMessageEvent = true;
-            $msgSource = "私聊";
-            $source = $d["author"]["id"] ?? $d["author"]["user_openid"] ?? '';
-            $user = $source;
+            define("消息来源", "私聊");
+            define("消息ID", $d["id"] ?? '');
+            define("来源", $d["author"]["id"] ?? $d["author"]["user_openid"] ?? '');
+            define("用户", $d["author"]["id"] ?? $d["author"]["user_openid"] ?? '');
             break;
 
-        case "DIRECT_MESSAGE_CREATE":   // 频道私信
-        case "AT_MESSAGE_CREATE":       // 频道@消息
-        case "MESSAGE_CREATE":          // 频道全量消息
-            $isMessageEvent = true;
-            $msgSource = "文字子频道";
-            $source = $d["channel_id"] ?? '';
-            $user = $d["author"]["id"] ?? '';
-            break;
-
-        // ---- 群事件（非消息） ----
         case "GROUP_ADD_ROBOT":
-        case "GROUP_DEL_ROBOT":
-            $msgSource = "群事件";
-            $source = $d["group_openid"] ?? '';
-            $user = $d["op_member_openid"] ?? '';
+            define("消息来源", "加群");
+            define("事件ID", $raw["id"] ?? '');
+            define("消息ID", $d["id"] ?? '');
+            define("来源", $d["group_openid"] ?? '');
+            define("用户", $d["op_member_openid"] ?? '');
             break;
 
-        case "GROUP_JOIN_REQUEST":
-            $msgSource = "入群申请";
-            $source = $d["group_openid"] ?? '';
-            $user = $d["member_openid"] ?? '';
+        case "GROUP_DEL_ROBOT":
+            define("消息来源", "退群");
+            define("事件ID", $raw["id"] ?? '');
+            define("消息ID", $d["id"] ?? '');
+            define("来源", $d["group_openid"] ?? '');
+            define("用户", $d["op_member_openid"] ?? '');
             break;
 
         case "GROUP_MEMBER_ADD":
+            define("消息来源", "成员入群");
+            define("事件ID", $raw["id"] ?? '');
+            define("消息ID", $d["id"] ?? '');
+            define("来源", $d["group_openid"] ?? '');
+            define("用户", $d["member_openid"] ?? '');
+            break;
+
         case "GROUP_MEMBER_REMOVE":
-        case "GROUP_MSG_RECEIVE":
-        case "GROUP_MSG_REJECT":
-        case "SUBSCRIBE_MESSAGE_STATUS":
-            $msgSource = "群事件";
-            $source = $d["group_openid"] ?? '';
-            $user = $d["op_member_openid"] ?? ($d["member_openid"] ?? '');
+            define("消息来源", "成员退群");
+            define("事件ID", $raw["id"] ?? '');
+            define("消息ID", $d["id"] ?? '');
+            define("来源", $d["group_openid"] ?? '');
+            define("用户", $d["member_openid"] ?? '');
             break;
 
-        // ---- 单聊事件（非消息） ----
-        case "FRIEND_ADD":
-        case "FRIEND_DEL":
-        case "C2C_MSG_REJECT":
-        case "C2C_MSG_RECEIVE":
-            $msgSource = "单聊事件";
-            $source = $d["user_openid"] ?? '';
-            $user = $source;
-            break;
-
-        // ---- 互动事件 ----
         case "INTERACTION_CREATE":
-            $msgSource = "互动";
-            $source = $d["group_openid"] ?? ($d["user_openid"] ?? '');
-            $user = $d["user_openid"] ?? ($d["group_member_openid"] ?? '');
+            define("消息来源", "互动");
+            define("事件ID", $raw["id"] ?? '');
+            define("消息ID", $d["id"] ?? '');
+            define("来源", $d["group_openid"] ?? ($d["user_openid"] ?? ''));
+            define("用户", $d["user_openid"] ?? ($d["group_member_openid"] ?? ''));
             break;
-
-        // ---- 频道消息管理（撤回/表态/审核） ----
-        case "MESSAGE_DELETE":
-        case "PUBLIC_MESSAGE_DELETE":
-        case "DIRECT_MESSAGE_DELETE":
-        case "MESSAGE_REACTION_ADD":
-        case "MESSAGE_REACTION_REMOVE":
-        case "MESSAGE_AUDIT_PASS":
-        case "MESSAGE_AUDIT_REJECT":
-            $msgSource = "频道消息管理";
-            $source = $d["channel_id"] ?? $d["guild_id"] ?? '';
-            $user = $d["author"]["id"] ?? $d["user_id"] ?? '';
-            break;
-
-        // ---- 论坛事件（普通 + 公域） ----
-        case "FORUM_THREAD_CREATE":
-        case "FORUM_THREAD_DELETE":
-        case "FORUM_THREAD_UPDATE":
-        case "FORUM_POST_CREATE":
-        case "FORUM_REPLY_CREATE":
-        case "FORUM_POST_DELETE":
-        case "FORUM_REPLY_DELETE":
-        case "OPEN_FORUM_THREAD_CREATE":
-        case "OPEN_FORUM_POST_CREATE":
-        case "OPEN_FORUM_REPLY_CREATE":
-        case "OPEN_FORUM_THREAD_UPDATE":
-        case "OPEN_FORUM_POST_DELETE":
-        case "OPEN_FORUM_REPLY_DELETE":
-        case "OPEN_FORUM_THREAD_DELETE":
-            $msgSource = "论坛";
-            $source = $d["guild_id"] ?? $d["channel_id"] ?? '';
-            $user = $d["author"]["id"] ?? $d["member_id"] ?? '';
-            break;
-
-        // ---- 频道管理（创建/更新/删除） ----
-        case "GUILD_CREATE":
-        case "GUILD_UPDATE":
-        case "GUILD_DELETE":
-            $msgSource = "频道管理";
-            $source = $d["guild_id"] ?? '';
-            $user = $d["operator_id"] ?? '';
-            break;
-
-        // ---- 子频道事件 ----
-        case "CHANNEL_CREATE":
-        case "CHANNEL_UPDATE":
-        case "CHANNEL_DELETE":
-            $msgSource = "子频道";
-            $source = $d["guild_id"] ?? '';
-            $user = $d["operator_id"] ?? '';
-            break;
-
-        // ---- 频道成员事件 ----
-        case "GUILD_MEMBER_ADD":
-        case "GUILD_MEMBER_REMOVE":
-        case "GUILD_MEMBER_UPDATE":
-            $msgSource = "成员";
-            $source = $d["guild_id"] ?? '';
-            $user = $d["user_id"] ?? $d["member_id"] ?? '';
-            break;
-
-        // ---- 音频事件 ----
-        case "AUDIO_START":
-        case "AUDIO_FINISH":
-        case "AUDIO_ON_MIC":
-        case "AUDIO_OFF_MIC":
-            $msgSource = "音频";
-            $source = $d["channel_id"] ?? '';
-            $user = $d["user_id"] ?? '';
-            break;
+        case "GROUP_JOIN_REQUEST":
+    define("消息来源", "入群申请");
+    define("事件ID", $raw["id"] ?? '');
+    define("来源", $d["group_openid"] ?? '');
+    define("用户", $d["member_openid"] ?? '');
+    // 标准化问题/答案
+    $qa = 解析入群申请($d['verify_info'] ?? []);
+    define("申请问题", $qa['问题']);
+    define("申请答案", $qa['答案']);
+    break;
 
         default:
-            // 未知事件（兜底，确保不中断）
-            $msgSource = "未知";
-            $source = $d["guild_id"] ?? $d["channel_id"] ?? $d["group_openid"] ?? '';
-            $user = $d["author"]["id"] ?? $d["user_id"] ?? $d["op_member_openid"] ?? '';
-            break;
+            // 未知/频道类事件：记录但不处理
+            return;
     }
 
-    // ---------- 定义常量（供插件使用） ----------
-    if (!defined('消息来源')) define('消息来源', $msgSource);
-    if (!defined('来源')) define('来源', $source);
-    if (!defined('用户')) define('用户', $user);
-    if (!defined('消息ID')) define('消息ID', $msgId);
-    if (!defined('事件ID')) define('事件ID', $eventId);
-
-    // ---------- 仅对消息类事件执行内容清洗与过滤 ----------
-    if ($isMessageEvent) {
-        // 群非艾特开关（仅针对 GROUP_MESSAGE_CREATE）
-        if ($event === "GROUP_MESSAGE_CREATE" && !机器人设置(appid, "群非艾特", true)) {
-            return;
+    // ---- 框架层学习机器人在群内的 member_openid ----
+    // GROUP_AT_MESSAGE_CREATE 消息开头一定是 @机器人，从中提取 member_openid
+    // GROUP_MESSAGE_CREATE（群非艾特模式）下，如果消息以@开头也提取
+    if (in_array($event, ['GROUP_AT_MESSAGE_CREATE', 'GROUP_MESSAGE_CREATE']) && !empty($d['group_openid'])) {
+        $rawContent = (string)($d['content'] ?? '');
+        if (preg_match('/^<@!?([A-F0-9]+)>/i', $rawContent, $m)) {
+            缓存机器人成员ID($d['group_openid'], $m[1]);
         }
-
-        // 排除机器人自己
-        if (机器人设置(appid, "排除机器人", true) && !empty($d["author"]["bot"])) {
-            return;
-        }
-        // 屏蔽其他机器人
-        if (机器人设置(appid, "屏蔽其他机器人", false) && !empty($d["author"]["bot"])) {
-            $authorId = $d["author"]["id"] ?? $d["author"]["member_openid"] ?? '';
-            if ($me === '' || $authorId !== $me) {
-                return;
-            }
-        }
-        // 是否处理自己消息
-        if (!机器人设置(appid, "处理自己消息", false)) {
-            if ($me !== '' && $me === 常量('用户')) {
-                return;
-            }
-        }
-
-        // 提取并清洗消息文本
-        $content = (string)($d["content"] ?? "");
-        // 群非艾特自动去掉开头@机器人
-        if ($event === "GROUP_MESSAGE_CREATE" && 机器人设置(appid, "群非艾特", true) && 机器人设置(appid, "自动去开头艾特", true)) {
-            if ($me !== '' && preg_match('/^<@' . preg_quote($me, '/') . '>\s*/u', $content, $m)) {
-                $content = substr($content, strlen($m[0]));
-            }
-        }
-        // 去掉所有@标记（若启用）
-        if (机器人设置(appid, "自动去艾特", true)) {
-            $content = (string)preg_replace('/<@[^>]*>/u', '', $content);
-        }
-        define('消息', trim($content, " /"));
-    } else {
-        // 非消息事件无文本内容
-        define('消息', '');
     }
 
-    // ---------- 通用常量 ----------
-    if (!defined('主人ID')) define("主人ID", 主人ID());
-    if (!defined('机器人ID')) define("机器人ID", $me);
+    // 群非艾特开关：关闭时忽略非艾特群消息
+    if ($event === "GROUP_MESSAGE_CREATE" && !机器人设置(appid, "群非艾特", true)) {
+        return;
+    }
 
-    // 身份判定（仅群聊消息场景且开启“仅群主可用”）
-    if ($isMessageEvent && 常量('消息来源') === "群聊" && 机器人设置(appid, "仅群主可用", false)) {
+    // 机器人自身 ID（缓存 1 小时，首次会请求一次官方接口）
+    $me = 自身ID();
+
+    // 排除机器人：开启时忽略机器人账号（含机器人与他人对话）
+    if (机器人设置(appid, "排除机器人", true) && !empty($d["author"]["bot"])) {
+        return;
+    }
+
+    // 屏蔽其他机器人：开启时忽略其他机器人的消息，不影响机器人自己
+    if (机器人设置(appid, "屏蔽其他机器人", false) && !empty($d["author"]["bot"])) {
+        $authorId = $d["author"]["id"] ?? $d["author"]["member_openid"] ?? '';
+        if ($me === '' || $authorId !== $me) {
+            return;
+        }
+    }
+
+    // 处理自己消息：关闭时不处理机器人自己发出的消息
+    if (!机器人设置(appid, "处理自己消息", false)) {
+        if ($me !== '' && $me === 常量('用户')) {
+            return;
+        }
+    }
+
+    // 消息文本
+    $content = (string)($d["content"] ?? "");
+
+    // 自动去掉开头的"艾特机器人+空格"：仅去除开头对机器人的艾特，艾特其他人不去除，消息末尾艾特机器人也不去除
+    // 群艾特消息（GROUP_AT_MESSAGE_CREATE）与非艾特消息（GROUP_MESSAGE_CREATE）均生效
+    if (in_array($event, ["GROUP_AT_MESSAGE_CREATE", "GROUP_MESSAGE_CREATE"], true) && 机器人设置(appid, "自动去开头艾特", true)) {
+        if ($me !== '' && preg_match('/^<@' . preg_quote($me, '/') . '>\s*/u', $content, $m)) {
+            $content = substr($content, strlen($m[0]));
+        }
+    }
+
+    // 自动去艾特：去掉所有艾特标记（原有行为）
+    if (机器人设置(appid, "自动去艾特", true)) {
+        $content = (string)preg_replace('/<@[^>]*>/u', '', $content);
+    }
+    define("消息", trim($content, " /"));
+
+    // 向插件提供主人 ID 与机器人自身 ID
+    if (!defined('主人ID')) {
+        define("主人ID", 主人ID());
+    }
+    if (!defined('机器人ID')) {
+        define("机器人ID", $me);
+    }
+
+    // 身份判定：仅群聊场景、且开启“仅群主可用”时才实时查询，避免无谓的接口调用
+    if (常量('消息来源') === "群聊" && 机器人设置(appid, "仅群主可用", false)) {
         define("身份", 群身份());
     } else {
         define("身份", "");
     }
     define("是否机器人", !empty($d["author"]["bot"]));
 
-    // ---------- 互动事件需提前 ACK ----------
+    // 按钮互动需要快速 ACK，否则 QQ 客户端可能提示“请求失败”。
+    // fastcgi_finish_request 会先结束 HTTP 响应，后续 PHP 仍继续执行插件逻辑发送消息。
     if ($event === "INTERACTION_CREATE" && function_exists('fastcgi_finish_request')) {
         @fastcgi_finish_request();
     }
 
-    // ---------- 加载插件 ----------
     load_plugin();
     exit;
 }

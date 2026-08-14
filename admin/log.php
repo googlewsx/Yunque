@@ -475,22 +475,68 @@ body{position:relative;min-height:100%;}
                     const icon = typeMap[data.action] || '📨';
                     return { typeClass: 'send', typeText: data.action || '发送', time: data.time || log.time, summary: `${icon} ${escapeHtml(String(data.content || '').substring(0, 100))}` };
                 }
-                if (data.t === 'GROUP_AT_MESSAGE_CREATE') {
-                    return { typeClass: 'receive', typeText: '群聊消息', time: log.time, summary: `👥 ${escapeHtml((data.d?.content || '').substring(0, 100))}` };
+                const summary = escapeHtml(log.summary || '事件记录');
+                const evMap = {
+                    'GROUP_AT_MESSAGE_CREATE': ['receive', '群聊 @消息', '👥'],
+                    'GROUP_MESSAGE_CREATE': ['receive', '群聊消息', '👥'],
+                    'C2C_MESSAGE_CREATE': ['receive', '单聊消息', '💬'],
+                    'DIRECT_MESSAGE_CREATE': ['receive', '频道私信', '💬'],
+                    'AT_MESSAGE_CREATE': ['receive', '频道 @消息', '📢'],
+                    'MESSAGE_CREATE': ['receive', '子频道消息', '📢'],
+                    'INTERACTION_CREATE': ['receive', '互动事件', '🔉'],
+                    'GROUP_ADD_ROBOT': ['event', '入群', '🏘️'],
+                    'GROUP_DEL_ROBOT': ['event', '退群', '🏘️'],
+                    'GROUP_MEMBER_ADD': ['event', '成员入群', '👋'],
+                    'GROUP_MEMBER_REMOVE': ['event', '成员退群', '👋'],
+                    'GROUP_JOIN_REQUEST': ['event', '入群申请', '🚪'],
+                    'GROUP_MSG_REJECT': ['event', '群拉黑', '🚫'],
+                    'GROUP_MSG_RECEIVE': ['event', '群恢复', '✅'],
+                    'C2C_MSG_REJECT': ['event', '用户拉黑', '🚫'],
+                    'C2C_MSG_RECEIVE': ['event', '用户恢复', '✅'],
+                    'FRIEND_ADD': ['event', '添加好友', '👤'],
+                    'FRIEND_DEL': ['event', '删除好友', '👤'],
+                    'MESSAGE_DELETE': ['event', '消息撤回', '↩️'],
+                    'PUBLIC_MESSAGE_DELETE': ['event', '频道消息撤回', '↩️'],
+                    'GROUP_AT_MESSAGE_DELETE': ['event', '群 @消息撤回', '↩️'],
+                    'GROUP_MESSAGE_DELETE': ['event', '群消息撤回', '↩️'],
+                    'C2C_MESSAGE_DELETE': ['event', '单聊消息撤回', '↩️'],
+                    'DIRECT_MESSAGE_DELETE': ['event', '频道私信撤回', '↩️'],
+                    'GROUP_MSG_EMOJI_UPDATE': ['event', '表情表态', '😀'],
+                    'GROUP_MSG_EMOJI_REACTION': ['event', '表情回应', '😀'],
+                    'GROUP_AUDIT': ['event', '群消息审核', '🛡️'],
+                    'GROUP_AUDIT_RETRY': ['event', '群消息审核重试', '🛡️'],
+                    'GUILD_CREATE': ['event', '进入频道', '🏘️'],
+                    'GUILD_UPDATE': ['event', '频道更新', '🏘️'],
+                    'GUILD_DELETE': ['event', '退出频道', '🏘️'],
+                    'GUILD_MEMBER_ADD': ['event', '频道成员加入', '👤'],
+                    'GUILD_MEMBER_UPDATE': ['event', '频道成员更新', '👤'],
+                    'GUILD_MEMBER_REMOVE': ['event', '频道成员退出', '👤'],
+                    'CHANNEL_CREATE': ['event', '子频道创建', '📂'],
+                    'CHANNEL_UPDATE': ['event', '子频道更新', '📂'],
+                    'CHANNEL_DELETE': ['event', '子频道删除', '📂'],
+                    'MESSAGE_REACTION_ADD': ['event', '表情表态添加', '😀'],
+                    'MESSAGE_REACTION_REMOVE': ['event', '表情表态取消', '😀'],
+                    'AUDIT': ['event', '频道消息审核', '🛡️'],
+                    'FORUM_THREAD_CREATE': ['event', '帖子创建', '📄'],
+                    'FORUM_THREAD_UPDATE': ['event', '帖子更新', '📄'],
+                    'FORUM_THREAD_DELETE': ['event', '帖子删除', '📄'],
+                    'FORUM_POST_CREATE': ['event', '帖子评论', '📄'],
+                    'FORUM_POST_DELETE': ['event', '帖子评论删除', '📄'],
+                    'FORUM_REPLY_CREATE': ['event', '回复创建', '💬'],
+                    'FORUM_REPLY_DELETE': ['event', '回复删除', '💬'],
+                    'FORUM_PUBLISH_EVENT': ['event', '帖子发布', '📄'],
+                    'AUDIO_OR_LIVE_CHANNEL_MEMBER_ENTER': ['event', '进入语音频道', '🎧'],
+                    'AUDIO_OR_LIVE_CHANNEL_MEMBER_EXIT': ['event', '退出语音频道', '🎧'],
+                    'LIVE_CHANNEL_MEMBER_ENTER': ['event', '进入直播', '📺'],
+                    'LIVE_CHANNEL_MEMBER_EXIT': ['event', '退出直播', '📺'],
+                    'READY': ['event', '连接就绪', '🔌'],
+                    'RESUMED': ['event', '连接恢复', '🔌']
+                };
+                const ev = evMap[data.t];
+                if (ev) {
+                    return { typeClass: ev[0], typeText: ev[1], time: log.time, summary: `${ev[2]} ${summary}` };
                 }
-                if (data.t === 'INTERACTION_CREATE') {
-                    return { typeClass: 'receive', typeText: '按钮互动', time: log.time, summary: `🔉 ${escapeHtml((data.d?.content || '').substring(0, 100))}` };
-                }
-                if (data.t === 'GROUP_MESSAGE_CREATE') {
-                    return { typeClass: 'receive', typeText: '群聊消息', time: log.time, summary: `👥 ${escapeHtml((data.d?.content || '').substring(0, 100))}` };
-                }
-                if (data.t === 'C2C_MESSAGE_CREATE') {
-                    return { typeClass: 'receive', typeText: '私聊消息', time: log.time, summary: `💬 ${escapeHtml((data.d?.content || '').substring(0, 100))}` };
-                }
-                if (data.t === 'DIRECT_MESSAGE_CREATE') {
-                    return { typeClass: 'receive', typeText: '频道私聊消息', time: log.time, summary: `💬 ${escapeHtml((data.d?.content || '').substring(0, 100))}` };
-                }
-                return { typeClass: 'event', typeText: data.t || '事件', time: log.time, summary: escapeHtml(log.summary || '事件记录') };
+                return { typeClass: 'event', typeText: data.t || '事件', time: log.time, summary: `📄 ${summary}` };
             } catch (e) {
                 return { typeClass: 'event', typeText: '解析错误', time: log.time, summary: '日志格式异常' };
             }

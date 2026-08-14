@@ -1,6 +1,9 @@
 <?php
 // 聊天记录API接口
 header('Content-Type: application/json');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 
 // mbstring 缺失时的兼容垫片
 if (!function_exists('mb_substr')) {
@@ -327,14 +330,20 @@ switch ($type) {
                                 $privates[$userId]["last_message"] = 消息预览($data);
                             }
                         }
-                    } elseif ($eventType == "GROUP_ADD_ROBOT" || $eventType == "GROUP_DEL_ROBOT") {
+                    } elseif (in_array($eventType, ["GROUP_ADD_ROBOT", "GROUP_DEL_ROBOT", "GROUP_MEMBER_ADD", "GROUP_MEMBER_REMOVE"], true)) {
                         $groupId = $data["d"]["group_openid"] ?? "";
                         if ($groupId && !isset($groups[$groupId])) {
+                            $eventLabels = [
+                                "GROUP_ADD_ROBOT" => "[机器人入群]",
+                                "GROUP_DEL_ROBOT" => "[机器人退群]",
+                                "GROUP_MEMBER_ADD" => "[成员入群]",
+                                "GROUP_MEMBER_REMOVE" => "[成员退群]",
+                            ];
                             $groups[$groupId] = [
                                 "id" => $groupId,
                                 "type" => "group",
                                 "last_message_time" => $time,
-                                "last_message" => $eventType == "GROUP_ADD_ROBOT" ? "[加群事件]" : "[退群事件]",
+                                "last_message" => $eventLabels[$eventType] ?? "[事件]",
                                 "message_count" => 0
                             ];
                         }
@@ -617,6 +626,30 @@ switch ($type) {
                                     "content" => "退出群聊"
                                 ];
                             }
+                        } elseif ($eventType == "GROUP_MEMBER_ADD") {
+                            $groupId = $data["d"]["group_openid"] ?? "";
+                            if ($groupId == $chatId) {
+                                $memberId = $data["d"]["member_openid"] ?? "";
+                                $message = [
+                                    "time" => $time,
+                                    "type" => "event",
+                                    "event_type" => "member_join",
+                                    "operator_id" => $memberId,
+                                    "content" => "新成员入群"
+                                ];
+                            }
+                        } elseif ($eventType == "GROUP_MEMBER_REMOVE") {
+                            $groupId = $data["d"]["group_openid"] ?? "";
+                            if ($groupId == $chatId) {
+                                $memberId = $data["d"]["member_openid"] ?? "";
+                                $message = [
+                                    "time" => $time,
+                                    "type" => "event",
+                                    "event_type" => "member_leave",
+                                    "operator_id" => $memberId,
+                                    "content" => "成员退群"
+                                ];
+                            }
                         } elseif (isset($data["direction"]) && $data["direction"] === "发送") {
                             // 兼容新日志结构：发送记录（无 BOT_MESSAGE 事件）
                             $sourceType = $data["source_type"] ?? "";
@@ -630,6 +663,7 @@ switch ($type) {
                                     "type" => "bot",
                                     "content" => $data["content"] ?? "",
                                     "message_type" => $mappedType,
+                                    "message_id" => $data["message_id"] ?? "",
                                     "image_url" => null,
                                     "voice_url" => null,
                                     "voice_url_silk" => null,
@@ -648,6 +682,7 @@ switch ($type) {
                                     "type" => "bot",
                                     "content" => $botData["content"] ?? "",
                                     "message_type" => $botData["type"] ?? "text",
+                                    "message_id" => $botData["message_id"] ?? "",
                                     "image_url" => $botData["image_url"] ?? null,
                                     "voice_url" => $botData["voice_url"] ?? null,
                                     "voice_url_silk" => $botData["voice_url_silk"] ?? null,
@@ -767,6 +802,7 @@ switch ($type) {
                                     "type" => "bot",
                                     "content" => $data["content"] ?? "",
                                     "message_type" => $mappedType,
+                                    "message_id" => $data["message_id"] ?? "",
                                     "image_url" => null,
                                     "voice_url" => null,
                                     "voice_url_silk" => null,
@@ -1465,6 +1501,9 @@ switch ($type) {
                 } elseif ($ev === 'GROUP_ADD_ROBOT' || $ev === 'GROUP_DEL_ROBOT') {
                     $uid = $d['d']['op_member_openid'] ?? '';
                     $uname = $d['d']['op_member']['nick'] ?? '';
+                } elseif ($ev === 'GROUP_MEMBER_ADD' || $ev === 'GROUP_MEMBER_REMOVE') {
+                    $uid = $d['d']['member_openid'] ?? '';
+                    $uname = '';
                 }
                 if ($uid === '') continue;
                 if (!isset($users[$uid])) {

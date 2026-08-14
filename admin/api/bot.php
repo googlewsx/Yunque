@@ -4,6 +4,9 @@
  * 支持：add / del / update / list
  */
 header('Content-Type: application/json');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 
 $file = dirname(__DIR__, 2) . "/main.json";
 $main = json_decode(@file_get_contents($file), true);
@@ -23,11 +26,26 @@ function 云雀_默认设置() {
     ];
 }
 
+/** 环境规范化：只允许「正式」「沙箱」，非法值回退「正式」 */
+function 云雀_环境($v) {
+    $v = trim((string)$v);
+    return ($v === '沙箱') ? '沙箱' : '正式';
+}
+
+function 云雀_群名缓存文件($appid) {
+    return dirname(__DIR__) . "/data/group_names_{$appid}.json";
+}
+function 云雀_读群名缓存($appid) {
+    $map = json_decode(@file_get_contents(云雀_群名缓存文件($appid)), true);
+    return is_array($map) ? $map : [];
+}
+
 switch ($type) {
     case "add":
         $appid = trim($_REQUEST["appid"] ?? "");
         $secret = trim($_REQUEST["secret"] ?? "");
-        $environment = trim($_REQUEST["environment"] ?? $_REQUEST["type"] ?? "正式");
+        // 只接受显式 environment 参数，回退默认「正式」，不再取接口操作参数 type
+        $environment = 云雀_环境($_REQUEST["environment"] ?? "正式");
         $qq_number = trim($_REQUEST["qq_number"] ?? "");
         $remark = trim($_REQUEST["remark"] ?? "");
 
@@ -69,26 +87,53 @@ switch ($type) {
             echo json_encode(["code" => 400, "msg" => "机器人不存在"], JSON_UNESCAPED_UNICODE);
             exit;
         }
-        // 允许部分更新
-        foreach (["secret", "type", "qq_number", "remark"] as $field) {
+        // 允许部分更新（注意：type 是接口操作参数，不是环境字段，此处排除）
+        foreach (["secret", "qq_number", "remark"] as $field) {
             if (isset($_REQUEST[$field])) {
                 $main[$appid][$field] = trim((string)$_REQUEST[$field]);
             }
         }
-        // 设置项：JSON 字符串，如 {"群非艾特":true}
+        // 环境只允许「正式」「沙箱」，通过 environment 参数更新，非法值回退「正式」
+        if (isset($_REQUEST["environment"])) {
+            $main[$appid]["type"] = 云雀_环境($_REQUEST["environment"]);
+        } elseif (isset($main[$appid]["type"])) {
+            $main[$appid]["type"] = 云雀_环境($main[$appid]["type"]);
+        } else {
+            $main[$appid]["type"] = "正式";
+        }
+        // 设置项：JSON 字符串，如 {"群非艾特":true}。
+        // 前端会全量传回 7 个开关状态，直接覆盖存储，避免关闭项被漏写回默认勾选。
         if (isset($_REQUEST["settings"])) {
             $settings = json_decode($_REQUEST["settings"], true);
             if (is_array($settings)) {
-                $main[$appid]["settings"] = array_merge(云雀_默认设置(), $settings);
+                $main[$appid]["settings"] = $settings;
             }
         }
-        // 主人：JSON 字符串，如 {"name":"XX","id":"openid","qq_number":"","remark":""}
+        // 主人：JSON，可为单对象 {"name":"XX","id":"openid","qq_number":"","remark":""}
+        // 或多主人数组 [ {...}, {...} ]，统一规范化为数组存储
         if (isset($_REQUEST["主人"])) {
             $owner = json_decode($_REQUEST["主人"], true);
+            $list = [];
             if (is_array($owner)) {
-                $main[$appid]["主人"] = array_merge([
-                    "name" => "", "id" => "", "qq_number" => "", "remark" => ""
-                ], $owner);
+                $list = (isset($owner['id']) || isset($owner['name'])) ? [$owner] : array_values($owner);
+            }
+            $clean = [];
+            foreach ($list as $one) {
+                if (!is_array($one)) continue;
+                $one['name'] = trim((string)($one['name'] ?? ''));
+                $one['id'] = trim((string)($one['id'] ?? ''));
+                $one['qq_number'] = trim((string)($one['qq_number'] ?? ''));
+                $one['remark'] = trim((string)($one['remark'] ?? ''));
+                if ($one['id'] !== '' || $one['qq_number'] !== '') {
+                    $clean[] = $one;
+                }
+            }
+            if (count($clean) === 1) {
+                $main[$appid]["主人"] = $clean[0];
+            } elseif (count($clean) > 1) {
+                $main[$appid]["主人"] = $clean;
+            } elseif (isset($main[$appid]["主人"])) {
+                unset($main[$appid]["主人"]);
             }
         }
         file_put_contents($file, json_encode($main, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
@@ -97,17 +142,42 @@ switch ($type) {
 
     case "list":
         $list = [];
+        $dirty = false;
         foreach ($main as $appid => $cfg) {
+            $type = 云雀_环境($cfg["type"] ?? "正式");
+            if (($cfg["type"] ?? "正式") !== $type) {
+                $main[$appid]["type"] = $type;
+                $dirty = true;
+            }
+            $owner = $cfg["主人"] ?? null;
+            $ownerOut = null;
+            if (is_array($owner)) {
+                if (isset($owner['id']) || isset($owner['qq_number']) || isset($owner['name'])) {
+                    $clean = array_merge(["name" => "", "id" => "", "qq_number" => "", "remark" => ""], $owner);
+                    if ($clean['id'] !== '' || $clean['qq_number'] !== '') $ownerOut = $clean;
+                } else {
+                    $clean = [];
+                    foreach (array_values($owner) as $one) {
+                        if (!is_array($one)) continue;
+                        $one = array_merge(["name" => "", "id" => "", "qq_number" => "", "remark" => ""], $one);
+                        if ($one['id'] !== '' || $one['qq_number'] !== '') $clean[] = $one;
+                    }
+                    if ($clean) $ownerOut = count($clean) === 1 ? $clean[0] : $clean;
+                }
+            }
             $list[] = [
                 "appid" => $appid,
                 "secret" => $cfg["secret"] ?? "",
-                "type" => $cfg["type"] ?? "正式",
+                "type" => $type,
                 "qq_number" => $cfg["qq_number"] ?? "",
                 "remark" => $cfg["remark"] ?? "",
-                "settings" => $cfg["settings"] ?? 云雀_默认设置(),
-                "主人" => $cfg["主人"] ?? ["name" => "", "id" => "", "qq_number" => "", "remark" => ""],
+                "settings" => array_merge(云雀_默认设置(), is_array($cfg["settings"] ?? null) ? $cfg["settings"] : []),
+                "主人" => $ownerOut,
                 "plugin_count" => count($cfg["plugin"] ?? [])
             ];
+        }
+        if ($dirty) {
+            file_put_contents($file, json_encode($main, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
         }
         echo json_encode(["code" => 200, "list" => $list], JSON_UNESCAPED_UNICODE);
         break;
@@ -140,6 +210,9 @@ switch ($type) {
                         } elseif ($ev === 'GROUP_ADD_ROBOT' || $ev === 'GROUP_DEL_ROBOT') {
                             $uid = $d['d']['op_member_openid'] ?? '';
                             $uname = $d['d']['op_member']['nick'] ?? '';
+                        } elseif ($ev === 'GROUP_MEMBER_ADD' || $ev === 'GROUP_MEMBER_REMOVE') {
+                            $uid = $d['d']['member_openid'] ?? '';
+                            $uname = '';
                         }
                         if ($uid === '') continue;
                         if (!isset($users[$uid])) {
@@ -179,7 +252,7 @@ switch ($type) {
                         $ev = $d['t'] ?? '';
                         $gid = $d['d']['group_openid'] ?? $d['d']['group_id'] ?? '';
                         if ($gid === '') continue;
-                        if (!in_array($ev, ['GROUP_AT_MESSAGE_CREATE', 'GROUP_MESSAGE_CREATE', 'GROUP_ADD_ROBOT', 'GROUP_DEL_ROBOT'], true)) continue;
+                        if (!in_array($ev, ['GROUP_AT_MESSAGE_CREATE', 'GROUP_MESSAGE_CREATE', 'GROUP_ADD_ROBOT', 'GROUP_DEL_ROBOT', 'GROUP_MEMBER_ADD', 'GROUP_MEMBER_REMOVE'], true)) continue;
                         if (!isset($groups[$gid])) {
                             $groups[$gid] = ['id' => $gid, 'last_time' => ''];
                         }
@@ -191,6 +264,11 @@ switch ($type) {
             }
         }
         $groupsList = array_values($groups);
+        $groupNameMap = 云雀_读群名缓存($appid);
+        foreach ($groupsList as $i => $g) {
+            $gid = $g['id'];
+            $groupsList[$i]['name'] = isset($groupNameMap[$gid]) ? (string)$groupNameMap[$gid] : '';
+        }
         usort($groupsList, function ($a, $b) {
             return strcmp($b['last_time'], $a['last_time']);
         });
