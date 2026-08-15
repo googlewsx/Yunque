@@ -27,7 +27,7 @@ $botQQJson = json_encode($botQQ);
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>云雀 Yunque · 聊天记录</title>
+<title>Yunque 云雀 · 聊天记录</title>
 <style>
 :root{
     --bg:#eef1f8; --card:#ffffff; --line:#e4e9f4; --brand:#5b6cff; --brand2:#8f9aff;
@@ -207,7 +207,7 @@ input,select,textarea{font-family:inherit;outline:none}
 <div id="app">
     <header class="topbar">
         <div class="brand" onclick="location.href='main.php'" title="返回主页">
-            <i>✦</i> 云雀 Yunque <span>聊天记录</span>
+            <i>✦</i> Yunque 云雀 <span>聊天记录</span>
         </div>
         <div class="top-actions">
             <select id="botPicker"></select>
