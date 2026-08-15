@@ -1,10 +1,31 @@
 <?php
-require dirname(__DIR__) . '/function/Parsedown.php';
-$parsedown = new Parsedown();
-$parsedown->setMarkupEscaped(true);
-$parsedown->setBreaksEnabled(true);
-$markdown = file_get_contents(dirname(__DIR__) . '/插件开发文档.md');
-$html = $parsedown->text($markdown);
+// 尝试加载 Parsedown，不存在时使用内置简易解析
+$parsedownPath = dirname(__DIR__) . '/function/Parsedown.php';
+if (file_exists($parsedownPath)) {
+    require_once $parsedownPath;
+    $parsedown = new Parsedown();
+    $parsedown->setMarkupEscaped(true);
+    $parsedown->setBreaksEnabled(true);
+} else {
+    // 内置简易 Markdown 解析（兼容无 Parsedown 环境）
+    $parsedown = null;
+}
+// 尝试读取开发文档，不存在时使用默认内容
+$mdPath = dirname(__DIR__) . '/插件开发文档.md';
+if (!file_exists($mdPath)) {
+    $mdPath = dirname(__DIR__) . '/文档.md';
+}
+if (file_exists($mdPath)) {
+    $markdown = file_get_contents($mdPath);
+} else {
+    $markdown = "# 插件开发文档\n\n文档文件未找到，请将 `插件开发文档.md` 放置于网站根目录。\n";
+}
+if ($parsedown) {
+    $html = $parsedown->text($markdown);
+} else {
+    $html = '<pre style="white-space:pre-wrap;word-break:break-word;font-family:inherit;">' . htmlspecialchars($markdown, ENT_QUOTES, 'UTF-8') . '</pre>';
+}
+$active_page = 'doc';
 ?>
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -15,26 +36,29 @@ $html = $parsedown->text($markdown);
     <link rel="stylesheet" href="assets/markdown.css">
     <link rel="stylesheet" href="assets/highlight/default.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="admin-common.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         :root {
-            --bg: #f8fafc;
+            --bg: #eef1f8;
             --card: #ffffff;
-            --border: #e9edf2;
-            --text-main: #1a2c3e;
-            --text-sub: #5e6f8d;
-            --text-muted: #8b9ab0;
-            --primary: #2c6b9e;
-            --primary-hover: #235b87;
-            --code-bg: #f1f5f9;
+            --border: #e4e9f4;
+            --text-main: #1f2437;
+            --text-sub: #6b7396;
+            --text-muted: #9aa3c0;
+            --primary: #5b6cff;
+            --brand: #5b6cff;
+            --brand2: #8f9aff;
+            --primary-hover: #4a5ae8;
+            --code-bg: #f5f6fc;
             --sidebar-width: 240px;
-            --header-height: 52px;
+            --header-height: 56px;
         }
 
         body {
             background: var(--bg);
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
             color: var(--text-main);
             line-height: 1.6;
         }
@@ -54,20 +78,20 @@ $html = $parsedown->text($markdown);
         .sidebar-header { padding: 20px 24px; border-bottom: 1px solid var(--border); }
         .sidebar-header h1 { font-size: 18px; font-weight: 600; color: var(--text-main); }
         .sidebar-header p { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
-        .sidebar-nav { flex: 1; padding: 16px 0; }
+        .sidebar-nav { flex: 1; padding: 14px 12px; }
         .nav-item {
             display: flex;
             align-items: center;
             gap: 12px;
-            padding: 10px 24px;
+            padding: 10px 14px; margin-bottom: 2px; border-radius: 9px;
             color: var(--text-sub);
             text-decoration: none;
             font-size: 14px;
             font-weight: 500;
             transition: all 0.15s;
         }
-        .nav-item:hover { background: #f1f5f9; color: var(--primary); }
-        .nav-item.active { background: #f1f5f9; color: var(--primary); border-left: 3px solid var(--primary); padding-left: 21px; }
+        .nav-item:hover { background: #f1f3fb; color: var(--primary); }
+        .nav-item.active { background: var(--primary-light, #eef0ff); color: var(--primary); font-weight: 600; }
         .nav-item i { width: 20px; font-size: 15px; }
         .sidebar-footer { padding: 16px 24px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-muted); }
 
@@ -90,7 +114,7 @@ $html = $parsedown->text($markdown);
         .card {
             background: var(--card);
             border: 1px solid var(--border);
-            border-radius: 10px;
+            border-radius: 12px; box-shadow: 0 1px 3px rgba(31,36,55,.04);
             overflow: hidden;
         }
         .card-header { padding: 16px 20px; border-bottom: 1px solid var(--border); }
@@ -107,15 +131,17 @@ $html = $parsedown->text($markdown);
         .markdown-body h3 { font-size: 18px; margin: 18px 0 10px; }
         .markdown-body p { margin: 0 0 16px; color: var(--text-sub); }
         .markdown-body pre {
-            background: var(--code-bg);
+            background: #1f2437;
+            color: #c8cef0;
             border: 1px solid var(--border);
-            border-radius: 8px;
+            border-radius: 10px;
             padding: 14px;
             overflow-x: auto;
             margin: 16px 0;
         }
         .markdown-body code {
-            background: var(--code-bg);
+            background: #f1f3fb;
+            color: var(--primary);
             padding: 2px 6px;
             border-radius: 4px;
             font-family: 'SF Mono', Monaco, monospace;
@@ -132,7 +158,7 @@ $html = $parsedown->text($markdown);
             padding: 8px 12px;
             text-align: left;
         }
-        .markdown-body th { background: #f8fafc; font-weight: 600; }
+        .markdown-body th { background: #f1f3fb; font-weight: 600; color: var(--text-main); }
         .markdown-body ul, .markdown-body ol { margin: 0 0 16px 24px; }
         .markdown-body li { margin: 4px 0; }
 
@@ -140,7 +166,7 @@ $html = $parsedown->text($markdown);
             padding: 6px 14px;
             font-size: 13px;
             font-weight: 500;
-            border-radius: 6px;
+            border-radius: 10px;
             cursor: pointer;
             border: none;
             display: inline-flex;
@@ -149,10 +175,10 @@ $html = $parsedown->text($markdown);
             text-decoration: none;
             transition: all 0.15s;
         }
-        .btn-primary { background: var(--primary); color: white; }
-        .btn-primary:hover { background: var(--primary-hover); }
-        .btn-secondary { background: #f1f5f9; color: var(--text-sub); border: 1px solid var(--border); }
-        .btn-secondary:hover { background: #e9edf2; }
+        .btn-primary { background: linear-gradient(135deg, var(--primary), var(--brand2, #8f9aff)); color: #fff; box-shadow: 0 2px 8px rgba(91,108,255,.25); }
+        .btn-primary:hover { filter: brightness(.95); }
+        .btn-secondary { background: #f1f3fb; color: var(--text-sub); border: 1px solid var(--border); }
+        .btn-secondary:hover { background: #e4e9f4; }
 
         .mobile-header {
             display: none;
@@ -175,70 +201,17 @@ $html = $parsedown->text($markdown);
             .markdown-body { font-size: 13px; }
             .markdown-body pre { font-size: 12px; }
         }
-    .main-content{height:calc(100vh - 60px);overflow-y:auto !important;overflow-x:hidden !important;}
-</style>
-    <link rel="stylesheet" href="theme-align.css">
-    <link rel="stylesheet" href="theme-pixel.css">
-
-<style id="manual-scrollbar-hide">
-/* 手动逐页写入：滚动可用但滚动条不显示 */
-html,body,*{scrollbar-width:none !important;-ms-overflow-style:none !important;}
-*::-webkit-scrollbar{width:0 !important;height:0 !important;display:none !important;background:transparent !important;}
-*::-webkit-scrollbar-thumb,*::-webkit-scrollbar-track{background:transparent !important;}
-/* 当前页常见滚动容器 */
-.messages,.menu,.log-list,.plugin-grid,.card-body,.table-responsive,textarea,#chatInput,.main-content,.container{scrollbar-width:none !important;-ms-overflow-style:none !important;}
-.messages::-webkit-scrollbar,.menu::-webkit-scrollbar,.log-list::-webkit-scrollbar,.plugin-grid::-webkit-scrollbar,.card-body::-webkit-scrollbar,.table-responsive::-webkit-scrollbar,textarea::-webkit-scrollbar,#chatInput::-webkit-scrollbar,.main-content::-webkit-scrollbar,.container::-webkit-scrollbar{width:0 !important;height:0 !important;display:none !important;}
-.main-content{height:calc(100vh - 60px);overflow-y:auto !important;overflow-x:hidden !important;}
-</style>
-
-<style id="manual-scroll-fix2">
-/* 二次强制：禁用系统滚动浮标（全页只允许指定容器滚动） */
-html,body{height:100%;overflow:hidden !important;overscroll-behavior:none !important;-webkit-overflow-scrolling:auto !important;scrollbar-width:none !important;scrollbar-color:transparent transparent !important;
-  scrollbar-gutter:stable both-edges !important;}
-body{position:relative;min-height:100%;}
-.main-content,.messages,.menu,.log-list,.plugin-grid,.table-responsive,textarea,#chatInput{
-  touch-action:pan-y;
-  overflow:auto !important;
-  -webkit-overflow-scrolling:auto !important;
-  scrollbar-width:none !important;
-  -ms-overflow-style:none !important;
-  scrollbar-color:transparent transparent !important;
-  scrollbar-gutter:stable both-edges !important;
-}
-.main-content::-webkit-scrollbar,.container::-webkit-scrollbar,.messages::-webkit-scrollbar,.menu::-webkit-scrollbar,.log-list::-webkit-scrollbar,.plugin-grid::-webkit-scrollbar,.card-body::-webkit-scrollbar,.table-responsive::-webkit-scrollbar,textarea::-webkit-scrollbar,#chatInput::-webkit-scrollbar{width:0 !important;height:0 !important;background:transparent !important;display:none !important;}
-.main-content{height:calc(100vh - 60px);overflow-y:auto !important;overflow-x:hidden !important;}
 </style>
 
 </head>
 <body>
-    <div class="mobile-header">
-        <button class="menu-toggle" id="menuToggle"><i class="fas fa-bars"></i></button>
-        <span style="font-weight:500;">官机框架2.0</span>
-        <div></div>
-    </div>
-
-    <div class="desktop-layout">
-        <aside class="sidebar" id="sidebar">
-            <div class="sidebar-header">
-                <h1>官机框架2.0</h1>
-                <p>机器人管理后台</p>
-            </div>
-            <nav class="sidebar-nav">
-                <a href="main.php" class="nav-item"><i class="fas fa-tachometer-alt"></i> 总览</a>
-                <a href="main.php" class="nav-item"><i class="fas fa-plus-circle"></i> 添加机器人</a>
-                <a href="set.php" class="nav-item"><i class="fas fa-user-cog"></i> 账号设置</a>
-                <a href="doc.php" class="nav-item active"><i class="fas fa-file-alt"></i> 开发文档</a>
-                <a href="http://qwq.nki.pw/plugin/index.html" class="nav-item" target="_blank"><i class="fas fa-puzzle-piece"></i> 插件商城</a>
-            </nav>
-            <div class="sidebar-footer">保留 1.0 原有逻辑 · 简洁商务版</div>
-        </aside>
-
+<?php include '_nav.php'; ?>
         <main class="main-content">
             <div class="top-bar">
                 <div class="page-title">开发文档</div>
                 <div>
                     <a href="main.php" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> 返回后台</a>
-                    <a href="../文档.md" class="btn btn-primary" target="_blank"><i class="fas fa-external-link-alt"></i> 原文</a>
+                    <?php if (file_exists($mdPath)): ?><a href="<?php echo htmlspecialchars(str_replace(dirname(__DIR__), '..', $mdPath), ENT_QUOTES); ?>" class="btn btn-primary" target="_blank"><i class="fas fa-external-link-alt"></i> 原文</a><?php endif; ?>
                 </div>
             </div>
 
@@ -271,16 +244,6 @@ body{position:relative;min-height:100%;}
                 wrapper.appendChild(table);
             });
 
-            const menuToggle = document.getElementById('menuToggle');
-            const sidebar = document.getElementById('sidebar');
-            if (menuToggle) {
-                menuToggle.addEventListener('click', () => sidebar.classList.toggle('open'));
-                document.addEventListener('click', (e) => {
-                    if (window.innerWidth <= 768 && !sidebar.contains(e.target) && !menuToggle.contains(e.target)) {
-                        sidebar.classList.remove('open');
-                    }
-                });
-            }
         });
     </script>
 </body>

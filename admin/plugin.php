@@ -8,6 +8,7 @@ $appid = $_GET['appid'] ?? '';
 if (empty($appid)) {
     die("缺少appid参数");
 }
+$active_page = 'plugin';
 ?>
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -20,24 +21,26 @@ if (empty($appid)) {
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         :root {
-            --bg: #f8fafc;
+            --bg: #eef1f8;
             --card: #ffffff;
-            --border: #e9edf2;
-            --text-main: #1a2c3e;
-            --text-sub: #5e6f8d;
-            --text-muted: #8b9ab0;
-            --primary: #2c6b9e;
-            --primary-hover: #235b87;
-            --success: #2c6e2c;
+            --border: #e4e9f4;
+            --text-main: #1f2437;
+            --text-sub: #6b7396;
+            --text-muted: #9aa3c0;
+            --primary: #5b6cff;
+            --brand: #5b6cff;
+            --brand2: #8f9aff;
+            --primary-hover: #4a5ae8;
+            --success: #2ecc71;
             --warning: #b85c1a;
-            --danger: #c23d2e;
+            --danger: #ff6b6b;
             --sidebar-width: 240px;
-            --header-height: 52px;
+            --header-height: 56px;
         }
 
         body {
             background: var(--bg);
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
             color: var(--text-main);
             line-height: 1.5;
         }
@@ -57,20 +60,20 @@ if (empty($appid)) {
         .sidebar-header { padding: 20px 24px; border-bottom: 1px solid var(--border); }
         .sidebar-header h1 { font-size: 18px; font-weight: 600; color: var(--text-main); }
         .sidebar-header p { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
-        .sidebar-nav { flex: 1; padding: 16px 0; }
+        .sidebar-nav { flex: 1; padding: 14px 12px; }
         .nav-item {
             display: flex;
             align-items: center;
             gap: 12px;
-            padding: 10px 24px;
+            padding: 10px 14px; margin-bottom: 2px; border-radius: 9px;
             color: var(--text-sub);
             text-decoration: none;
             font-size: 14px;
             font-weight: 500;
             transition: all 0.15s;
         }
-        .nav-item:hover { background: #f1f5f9; color: var(--primary); }
-        .nav-item.active { background: #f1f5f9; color: var(--primary); border-left: 3px solid var(--primary); padding-left: 21px; }
+        .nav-item:hover { background: #f1f3fb; color: var(--primary); }
+        .nav-item.active { background: var(--primary-light, #eef0ff); color: var(--primary); font-weight: 600; }
         .nav-item i { width: 20px; font-size: 15px; }
         .sidebar-footer { padding: 16px 24px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-muted); }
 
@@ -99,7 +102,7 @@ if (empty($appid)) {
         .stat-card {
             background: var(--card);
             border: 1px solid var(--border);
-            border-radius: 10px;
+            border-radius: 12px; box-shadow: 0 1px 3px rgba(31,36,55,.04);
             padding: 14px 18px;
         }
         .stat-label { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
@@ -108,7 +111,7 @@ if (empty($appid)) {
         .card {
             background: var(--card);
             border: 1px solid var(--border);
-            border-radius: 10px;
+            border-radius: 12px; box-shadow: 0 1px 3px rgba(31,36,55,.04);
             overflow: hidden;
         }
         .card-header {
@@ -128,11 +131,11 @@ if (empty($appid)) {
             font-weight: 500;
             border-radius: 20px;
             cursor: pointer;
-            background: #f1f5f9;
+            background: #f1f3fb;
             color: var(--text-sub);
             transition: all 0.15s;
         }
-        .tab.active { background: var(--primary); color: white; }
+        .tab.active { background: linear-gradient(135deg, var(--primary), var(--brand2)); color: #fff; box-shadow: 0 2px 8px rgba(91,108,255,.25); }
         .tab-content { display: none; padding: 20px; }
         .tab-content.active { display: block; }
 
@@ -143,9 +146,15 @@ if (empty($appid)) {
         }
         .plugin-card {
             border: 1px solid var(--border);
-            border-radius: 10px;
+            border-radius: 12px;
             padding: 16px;
-            background: white;
+            background: #fff;
+            box-shadow: 0 1px 3px rgba(31,36,55,.04);
+            transition: box-shadow .15s, transform .15s;
+        }
+        .plugin-card:hover {
+            box-shadow: 0 4px 16px rgba(91,108,255,.1);
+            transform: translateY(-1px);
         }
         .plugin-header {
             display: flex;
@@ -159,18 +168,18 @@ if (empty($appid)) {
             font-size: 11px;
             padding: 2px 8px;
             border-radius: 20px;
-            background: #f1f5f9;
+            background: #f1f3fb;
         }
-        .badge.enabled { background: #eef6ec; color: var(--success); }
-        .badge.disabled { background: #fef2f0; color: var(--danger); }
-        .plugin-actions { display: flex; gap: 8px; margin-top: 14px; }
-        .plugin-actions .btn { flex: 1; justify-content: center; }
+        .badge.enabled { background: #e8f8ef; color: var(--success); }
+        .badge.disabled { background: #fff0f0; color: var(--danger); }
+        .plugin-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+        .plugin-actions .btn { flex: 1 1 calc(50% - 4px); min-width: 0; justify-content: center; padding: 7px 8px; font-size: 12px; }
 
         .btn {
             padding: 6px 12px;
             font-size: 12px;
             font-weight: 500;
-            border-radius: 6px;
+            border-radius: 10px;
             cursor: pointer;
             border: none;
             display: inline-flex;
@@ -179,16 +188,16 @@ if (empty($appid)) {
             text-decoration: none;
             transition: all 0.15s;
         }
-        .btn-primary { background: var(--primary); color: white; }
-        .btn-primary:hover { background: var(--primary-hover); }
-        .btn-secondary { background: #f1f5f9; color: var(--text-sub); border: 1px solid var(--border); }
-        .btn-secondary:hover { background: #e9edf2; }
+        .btn-primary { background: linear-gradient(135deg, var(--primary), var(--brand2)); color: #fff; box-shadow: 0 2px 8px rgba(91,108,255,.25); }
+        .btn-primary:hover { filter: brightness(.95); }
+        .btn-secondary { background: #f1f3fb; color: var(--text-sub); border: 1px solid var(--border); }
+        .btn-secondary:hover { background: #e4e9f4; }
         .btn-success { background: var(--success); color: white; }
-        .btn-success:hover { background: #235b23; }
+        .btn-success:hover { filter: brightness(.95); }
         .btn-danger { background: var(--danger); color: white; }
-        .btn-danger:hover { background: #a83426; }
+        .btn-danger:hover { filter: brightness(.95); }
         .btn-warning { background: var(--warning); color: white; }
-        .btn-warning:hover { background: #9e4a15; }
+        .btn-warning:hover { filter: brightness(.95); }
 
         .empty-state { text-align: center; padding: 48px 20px; color: var(--text-muted); }
 
@@ -196,25 +205,26 @@ if (empty($appid)) {
             display: none;
             position: fixed;
             inset: 0;
-            background: rgba(0, 0, 0, 0.4);
+            background: rgba(31,36,55,.45);
             z-index: 1000;
             align-items: center;
             justify-content: center;
             padding: 20px;
         }
         .modal-content {
-            background: white;
-            border-radius: 12px;
+            background: #fff;
+            border-radius: 16px;
             width: 100%;
             max-width: 680px;
             max-height: 85vh;
             overflow: auto;
+            box-shadow: 0 20px 60px rgba(31,36,55,.2);
         }
         #editModal .modal-content { max-width: min(1100px, 96vw); }
         #editModal .modal-body { padding: 16px 20px; }
         .code-editor-wrap {
             border: 1px solid var(--border);
-            border-radius: 8px;
+            border-radius: 10px;
             overflow: hidden;
             background: #0f172a;
         }
@@ -237,14 +247,16 @@ if (empty($appid)) {
         .form-group label { display: block; font-size: 13px; font-weight: 500; color: var(--text-sub); margin-bottom: 6px; }
         .form-control, .form-textarea {
             width: 100%;
-            padding: 10px 12px;
+            padding: 9px 13px;
             font-size: 13px;
-            border: 1px solid var(--border);
-            border-radius: 8px;
+            border: 1.5px solid var(--border);
+            border-radius: 10px;
             font-family: inherit;
+            background: #f7f8fd;
+            transition: all .15s;
         }
         .form-textarea { min-height: 400px; font-family: 'SF Mono', monospace; font-size: 12px; resize: vertical; }
-        .form-control:focus, .form-textarea:focus { outline: none; border-color: var(--primary); }
+        .form-control:focus, .form-textarea:focus { outline: none; border-color: var(--primary); background: #fff; box-shadow: 0 0 0 3px rgba(91,108,255,.1); }
 
         .mobile-header {
             display: none;
@@ -283,66 +295,14 @@ if (empty($appid)) {
         .notification.show { transform: translateX(0); }
         .notification.success { background: var(--success); }
         .notification.error { background: var(--danger); }
-    .main-content{height:calc(100vh - 60px);overflow-y:auto !important;overflow-x:hidden !important;}
 </style>
-    <link rel="stylesheet" href="theme-align.css">
-    <link rel="stylesheet" href="theme-pixel.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
-
-<style id="manual-scrollbar-hide">
-/* 手动逐页写入：滚动可用但滚动条不显示 */
-html,body,*{scrollbar-width:none !important;-ms-overflow-style:none !important;}
-*::-webkit-scrollbar{width:0 !important;height:0 !important;display:none !important;background:transparent !important;}
-*::-webkit-scrollbar-thumb,*::-webkit-scrollbar-track{background:transparent !important;}
-/* 当前页常见滚动容器 */
-.messages,.menu,.log-list,.plugin-grid,.card-body,.table-responsive,textarea,#chatInput,.main-content,.container{scrollbar-width:none !important;-ms-overflow-style:none !important;}
-.messages::-webkit-scrollbar,.menu::-webkit-scrollbar,.log-list::-webkit-scrollbar,.plugin-grid::-webkit-scrollbar,.card-body::-webkit-scrollbar,.table-responsive::-webkit-scrollbar,textarea::-webkit-scrollbar,#chatInput::-webkit-scrollbar,.main-content::-webkit-scrollbar,.container::-webkit-scrollbar{width:0 !important;height:0 !important;display:none !important;}
-.main-content{height:calc(100vh - 60px);overflow-y:auto !important;overflow-x:hidden !important;}
-</style>
-
-<style id="manual-scroll-fix2">
-/* 二次强制：禁用系统滚动浮标（全页只允许指定容器滚动） */
-html,body{height:100%;overflow:hidden !important;overscroll-behavior:none !important;-webkit-overflow-scrolling:auto !important;scrollbar-width:none !important;scrollbar-color:transparent transparent !important;
-  scrollbar-gutter:stable both-edges !important;}
-body{position:relative;min-height:100%;}
-.main-content,.messages,.menu,.log-list,.plugin-grid,.table-responsive,textarea,#chatInput{
-  touch-action:pan-y;
-  overflow:auto !important;
-  -webkit-overflow-scrolling:auto !important;
-  scrollbar-width:none !important;
-  -ms-overflow-style:none !important;
-  scrollbar-color:transparent transparent !important;
-  scrollbar-gutter:stable both-edges !important;
-}
-.main-content::-webkit-scrollbar,.container::-webkit-scrollbar,.messages::-webkit-scrollbar,.menu::-webkit-scrollbar,.log-list::-webkit-scrollbar,.plugin-grid::-webkit-scrollbar,.card-body::-webkit-scrollbar,.table-responsive::-webkit-scrollbar,textarea::-webkit-scrollbar,#chatInput::-webkit-scrollbar{width:0 !important;height:0 !important;background:transparent !important;display:none !important;}
-.main-content{height:calc(100vh - 60px);overflow-y:auto !important;overflow-x:hidden !important;}
-</style>
+    <link rel="stylesheet" href="admin-common.css">
 
 </head>
 <body>
-    <div class="mobile-header">
-        <button class="menu-toggle" id="menuToggle"><i class="fas fa-bars"></i></button>
-        <span style="font-weight:500;">官机框架2.0</span>
-        <div></div>
-    </div>
-
-    <div class="desktop-layout">
-        <aside class="sidebar" id="sidebar">
-            <div class="sidebar-header">
-                <h1>官机框架2.0</h1>
-                <p>机器人管理后台</p>
-            </div>
-            <nav class="sidebar-nav">
-                <a href="main.php" class="nav-item"><i class="fas fa-tachometer-alt"></i> 总览</a>
-                <a href="main.php" class="nav-item"><i class="fas fa-plus-circle"></i> 添加机器人</a>
-                <a href="set.php" class="nav-item"><i class="fas fa-user-cog"></i> 账号设置</a>
-                <a href="doc.php" class="nav-item"><i class="fas fa-file-alt"></i> 开发文档</a>
-                <a href="http://qwq.nki.pw/plugin/index.html" class="nav-item" target="_blank"><i class="fas fa-puzzle-piece"></i> 插件商城</a>
-            </nav>
-            <div class="sidebar-footer">保留 1.0 原有逻辑 · 简洁商务版</div>
-        </aside>
-
+<?php include '_nav.php'; ?>
         <main class="main-content">
             <div class="top-bar">
                 <div class="page-title">插件管理 · <?php echo htmlspecialchars($appid); ?></div>
@@ -424,7 +384,7 @@ body{position:relative;min-height:100%;}
                 </div>
                 <div class="form-group" id="scopeGroupsWrap">
                     <label>指定生效的群（从日志中遍历选择）</label>
-                    <input type="text" class="form-control" id="scopeSearch" placeholder="搜索群名…">
+                    <input type="text" class="form-control" id="scopeSearch" placeholder="搜索群名 / ID…">
                     <div id="scopeGroups" style="margin-top:8px;display:grid;gap:6px;max-height:42vh;overflow:auto;"></div>
                 </div>
             </div>
@@ -496,33 +456,45 @@ body{position:relative;min-height:100%;}
                 document.getElementById('enabledCount').textContent = enabled.length;
                 document.getElementById('disabledCount').textContent = disabled.length;
                 document.getElementById('allCount').textContent = allPlugins.length;
-                renderPluginList(enabled, 'enabledList', true);
-                renderPluginList(disabled, 'disabledList', false);
-                renderPluginList(allPlugins, 'allList', null);
+                const enabledSet = new Set(enabled);
+                renderPluginList(enabled, 'enabledList', enabledSet);
+                renderPluginList(disabled, 'disabledList', enabledSet);
+                renderPluginList(allPlugins, 'allList', enabledSet);
             } catch (err) {
                 showMsg('加载失败', false);
             }
         }
 
-        function renderPluginList(plugins, containerId, isEnabled) {
+        function renderPluginList(plugins, containerId, enabledSet) {
             const container = document.getElementById(containerId);
             if (!plugins.length) { container.innerHTML = '<div class="empty-state">暂无插件</div>'; return; }
-            container.innerHTML = plugins.map(plugin => `
+            container.innerHTML = plugins.map(plugin => {
+                const on = enabledSet.has(plugin);
+                // 已启用：禁用 / 作用域 / 编辑（不可删除）
+                // 未启用：启用 / 编辑 / 删除（不可调作用域）
+                const toggleBtn = on
+                    ? `<button class="btn btn-warning toggle-plugin" data-plugin="${plugin}" data-action="disable"><i class="fas fa-toggle-off"></i> 禁用</button>`
+                    : `<button class="btn btn-success toggle-plugin" data-plugin="${plugin}" data-action="enable"><i class="fas fa-toggle-on"></i> 启用</button>`;
+                const scopeBtn = on
+                    ? `<button class="btn btn-secondary scope-plugin" data-plugin="${plugin}"><i class="fas fa-location-arrow"></i> 作用域</button>`
+                    : '';
+                const deleteBtn = on
+                    ? ''
+                    : `<button class="btn btn-danger delete-plugin" data-plugin="${plugin}"><i class="fas fa-trash"></i> 删除</button>`;
+                return `
                 <div class="plugin-card">
                     <div class="plugin-header">
                         <div><div class="plugin-name">${escapeHtml(plugin)}</div><div class="plugin-file">${plugin}.php</div></div>
-                        <span class="badge ${isEnabled === true ? 'enabled' : isEnabled === false ? 'disabled' : ''}">${isEnabled === true ? '已启用' : isEnabled === false ? '未启用' : '插件'}</span>
+                        <span class="badge ${on ? 'enabled' : 'disabled'}">${on ? '已启用' : '未启用'}</span>
                     </div>
                     <div class="plugin-actions">
-                        ${isEnabled !== null ? (isEnabled ? 
-                            `<button class="btn btn-warning toggle-plugin" data-plugin="${plugin}" data-action="disable"><i class="fas fa-toggle-off"></i> 禁用</button>` :
-                            `<button class="btn btn-success toggle-plugin" data-plugin="${plugin}" data-action="enable"><i class="fas fa-toggle-on"></i> 启用</button>`) : ''}
-                        <button class="btn btn-secondary scope-plugin" data-plugin="${plugin}"><i class="fas fa-location-arrow"></i> 作用域</button>
+                        ${toggleBtn}
+                        ${scopeBtn}
                         <button class="btn btn-secondary edit-plugin" data-plugin="${plugin}"><i class="fas fa-edit"></i> 编辑</button>
-                        <button class="btn btn-danger delete-plugin" data-plugin="${plugin}"><i class="fas fa-trash"></i> 删除</button>
+                        ${deleteBtn}
                     </div>
-                </div>
-            `).join('');
+                </div>`;
+            }).join('');
             container.querySelectorAll('.toggle-plugin').forEach(btn => btn.addEventListener('click', () => togglePlugin(btn.dataset.plugin, btn.dataset.action)));
             container.querySelectorAll('.scope-plugin').forEach(btn => btn.addEventListener('click', () => openScopeModal(btn.dataset.plugin)));
             container.querySelectorAll('.edit-plugin').forEach(btn => btn.addEventListener('click', () => openEditModal(btn.dataset.plugin)));
@@ -596,15 +568,15 @@ body{position:relative;min-height:100%;}
             } catch (err) { showMsg('添加失败', false); }
         });
 
-        /* ---------- 插件作用域（从日志遍历选择群） ---------- */
+        /* ---------- 插件作用域（从日志遍历选择群，群名异步补齐） ---------- */
         let scopePlugin = null;
         let scopeGroupsData = [];
         let scopeSelectedGroups = new Set();
+        let scopeGroupNameCache = {};
 
         async function openScopeModal(plugin) {
             scopePlugin = plugin;
             scopeSelectedGroups = new Set();
-            scopeNameLoading.clear();
             document.getElementById('scopePluginName').value = plugin;
             document.getElementById('scopeMode').value = 'all';
             document.getElementById('scopeSearch').value = '';
@@ -620,10 +592,38 @@ body{position:relative;min-height:100%;}
             renderScopeGroups();
             syncScopeWrap();
             document.getElementById('scopeModal').style.display = 'flex';
+            // 异步加载群名（模仿聊天记录页，调用官方群信息接口并缓存）
+            fetchScopeGroupNames();
         }
 
         function syncScopeWrap() {
             document.getElementById('scopeGroupsWrap').style.display = document.getElementById('scopeMode').value === 'specified' ? 'block' : 'none';
+        }
+
+        // 逐个请求群名，命中缓存则跳过，返回后更新对应 DOM
+        function fetchScopeGroupNames() {
+            scopeGroupsData.forEach(g => {
+                const id = g.id;
+                if (scopeGroupNameCache[id] !== undefined) return;
+                scopeGroupNameCache[id] = ''; // 占位，防止重复请求
+                fetch(`api/chat.php?type=group_name&appid=${encodeURIComponent(appid)}&group_id=${encodeURIComponent(id)}`)
+                    .then(r => r.json())
+                    .then(d => {
+                        if (d.code === 200 && d.name) {
+                            scopeGroupNameCache[id] = d.name;
+                            updateScopeGroupName(id, d.name);
+                        } else {
+                            scopeGroupNameCache[id] = '';
+                        }
+                    })
+                    .catch(() => { scopeGroupNameCache[id] = ''; });
+            });
+        }
+
+        function updateScopeGroupName(id, name) {
+            const box = document.getElementById('scopeGroups');
+            const nameEl = box.querySelector(`[data-gid="${id}"] .gname`);
+            if (nameEl) nameEl.textContent = name;
         }
 
         function renderScopeGroups() {
@@ -631,9 +631,8 @@ body{position:relative;min-height:100%;}
             const box = document.getElementById('scopeGroups');
             const list = scopeGroupsData.filter(g => {
                 if (!kw) return true;
-                const name = (g.name || '').toLowerCase();
-                const id = String(g.id).toLowerCase();
-                return name.includes(kw) || id.includes(kw);
+                const name = String(scopeGroupNameCache[g.id] || '').toLowerCase();
+                return String(g.id).toLowerCase().includes(kw) || name.includes(kw) || String(g.last_time || '').includes(kw);
             });
             if (!list.length) {
                 box.innerHTML = '<div class="empty-state">暂无群记录（需要先有群聊日志）</div>';
@@ -641,46 +640,20 @@ body{position:relative;min-height:100%;}
             }
             box.innerHTML = list.map(g => {
                 const checked = scopeSelectedGroups.has(g.id) ? 'checked' : '';
-                const displayName = g.name ? escapeHtml(g.name) : '<span style="color:var(--text-muted)">加载群名中…</span>';
-                return `<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:white;">
+                const gname = scopeGroupNameCache[g.id] || '';
+                return `<label data-gid="${escapeHtml(g.id)}" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:white;">
                     <input type="checkbox" value="${escapeHtml(g.id)}" ${checked}>
-                    <span style="flex:1;min-width:0;">
-                        <span style="display:block;font-size:13px;font-weight:500;word-break:break-word;" data-gid="${escapeHtml(g.id)}">${displayName}</span>
-                        <span style="display:block;font-size:10px;color:var(--text-muted);margin-top:2px;">${escapeHtml(g.last_time)}</span>
+                    <span style="min-width:0;flex:1;">
+                        <span class="gname" style="display:block;font-size:13px;font-weight:600;color:var(--text-main);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${gname ? escapeHtml(gname) : '<span style="color:var(--text-muted);font-weight:400;">群名加载中…</span>'}</span>
+                        <span style="display:block;font-size:11px;color:var(--text-muted);word-break:break-all;">${escapeHtml(g.id)}</span>
                     </span>
+                    <span style="font-size:10px;color:var(--text-muted);white-space:nowrap;">${escapeHtml(g.last_time || '')}</span>
                 </label>`;
             }).join('');
             box.querySelectorAll('input[type=checkbox]').forEach(cb => {
                 cb.addEventListener('change', () => {
                     if (cb.checked) scopeSelectedGroups.add(cb.value); else scopeSelectedGroups.delete(cb.value);
                 });
-            });
-            loadMissingGroupNames();
-        }
-
-        const scopeNameLoading = new Set();
-        function loadMissingGroupNames() {
-            scopeGroupsData.forEach(g => {
-                if (g.name || scopeNameLoading.has(g.id)) return;
-                scopeNameLoading.add(g.id);
-                fetch(`api/chat.php?type=group_name&appid=${encodeURIComponent(appid)}&group_id=${encodeURIComponent(g.id)}`)
-                    .then(r => r.json())
-                    .then(d => {
-                        if (d.code === 200 && d.name) {
-                            g.name = d.name;
-                            const el = document.querySelector(`#scopeGroups [data-gid="${CSS.escape(g.id)}"]`);
-                            if (el) el.textContent = d.name;
-                        } else {
-                            g.name = g.id;
-                            const el = document.querySelector(`#scopeGroups [data-gid="${CSS.escape(g.id)}"]`);
-                            if (el) { el.textContent = g.id; el.style.color = 'var(--text-muted)'; }
-                        }
-                    })
-                    .catch(() => {
-                        g.name = g.id;
-                        const el = document.querySelector(`#scopeGroups [data-gid="${CSS.escape(g.id)}"]`);
-                        if (el) { el.textContent = g.id; el.style.color = 'var(--text-muted)'; }
-                    });
             });
         }
 
@@ -711,15 +684,6 @@ body{position:relative;min-height:100%;}
 
         function escapeHtml(str) { if (!str) return ''; return String(str).replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m])); }
 
-        // 移动端侧边栏
-        const menuToggle = document.getElementById('menuToggle');
-        const sidebar = document.getElementById('sidebar');
-        if (menuToggle) {
-            menuToggle.addEventListener('click', () => sidebar.classList.toggle('open'));
-            document.addEventListener('click', (e) => {
-                if (window.innerWidth <= 768 && !sidebar.contains(e.target) && !menuToggle.contains(e.target)) sidebar.classList.remove('open');
-            });
-        }
         loadPlugins();
     </script>
 </body>

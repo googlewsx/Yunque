@@ -19,7 +19,7 @@ $msgTrim = trim(消息);
 if ($msgTrim === "") return;
 
 // ==================== 触发条 ====================
-$hasQuestion = (stripos($msgTrim, "星野？糯") !== false) || (stripos($msgTrim, "糯糯") !== false);
+$hasQuestion = (stripos($msgTrim, "星野糯") !== false) || (stripos($msgTrim, "糯糯") !== false);
 if (!$hasQuestion) {
     return;   // 无问号则忽略
 }

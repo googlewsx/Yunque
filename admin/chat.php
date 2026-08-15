@@ -100,6 +100,9 @@ input,select,textarea{font-family:inherit;outline:none}
 .msg.me .bname{text-align:right}
 .bubble .body{background:var(--them);border-radius:14px;padding:9px 13px;font-size:14px;line-height:1.6;word-break:break-word;box-shadow:0 1px 3px rgba(30,40,90,.06);display:inline-block;position:relative}
 .msg.me .bubble .body{background:var(--me)}
+.msg.me .bubble{cursor:pointer}
+.msg.me .bubble:hover .body{filter:brightness(0.96)}
+.msg.me .bubble .msg-tools{cursor:default}
 .bubble .body.time{display:inline-block;font-size:12px;color:var(--muted)}
 .msg.event{justify-content:center}
 .msg.event .bubble .body{background:transparent;box-shadow:none;color:var(--muted);font-size:12px;padding:2px 10px}
@@ -115,9 +118,11 @@ input,select,textarea{font-family:inherit;outline:none}
 .emoji-tok{background:#eef1ff;color:var(--brand);border-radius:8px;padding:0 6px;font-size:12px}
 .msg-attach{color:var(--brand);text-decoration:none;font-size:13px;display:block;margin-top:4px;word-break:break-all}
 .msg-tools{display:none;gap:6px;margin-top:6px;flex-wrap:wrap}
-.msg:hover .msg-tools{display:flex}
+.msg:hover .msg-tools,.msg.tools-open .msg-tools{display:flex}
 .mact{background:#fff;border:1px solid var(--line);color:var(--muted);border-radius:8px;padding:3px 9px;font-size:11.5px;cursor:pointer;transition:.15s}
 .mact:hover{color:var(--brand);border-color:var(--brand)}
+.mact.revoke:hover{color:var(--danger);border-color:var(--danger)}
+.mact.mute:hover{color:var(--warn);border-color:var(--warn)}
 
 /* ---------- 输入区 ---------- */
 .composer{background:var(--card);border-top:1px solid var(--line);padding:8px 14px 12px;flex-shrink:0}
@@ -322,7 +327,8 @@ const state = {
 
 // ---- 机器人全局变量 ----
 let botName = '机器人';
-let botAvatar = '';
+// 默认使用 QQ 官方头像接口，避免依赖外部 API 加载失败导致空白
+let botAvatar = botQQ ? ('https://q.qlogo.cn/headimg_dl?dst_uin=' + encodeURIComponent(botQQ) + '&spec=100') : '';
 
 // ---- 工具函数 ----
 function $(id){ return document.getElementById(id); }
@@ -398,10 +404,13 @@ function letterAva(id, name, cls){
 
 // ---- 机器人头像 ----
 function botAva(cls){
+    const avaCls = cls || '';
+    // 与用户头像一致的回退模式：img 加载失败时显示带样式的 span
+    const fallbackSpan = `<span class="ava ${avaCls}" style="display:none;background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;">雀</span>`;
     if (!botAvatar) {
-        return `<div class="ava ${cls||''} bot-ava"><span>雀</span></div>`;
+        return `<div class="ava ${avaCls} bot-ava" style="background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;"><span>雀</span></div>`;
     }
-    return `<div class="ava ${cls||''}"><img src="${esc(botAvatar)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.outerHTML='<span>雀</span>'"></div>`;
+    return `<div class="ava ${avaCls}"><img src="${esc(botAvatar)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">${fallbackSpan}</div>`;
 }
 
 // ---- 机器人信息加载 ----
@@ -768,6 +777,8 @@ function renderEmojis(emojis){
 }
 function renderRichText(content, emojis){
     let text = content || '';
+    // 移除 Markdown 图片语法 ![alt](url)，图片已通过 image_urls 单独渲染
+    text = text.replace(/!\[[^\]]*\]\(https?:\/\/[^\s\)]+\)/gi, '');
     text = text.replace(/<faceType[^>]*>/gi, '');
     text = text.replace(/<\/faceType>/gi, '');
     text = text.replace(/&lt;faceType[^&]*&gt;/gi, '');
@@ -786,6 +797,23 @@ function renderRichText(content, emojis){
 }
 
 /* ---------- 消息渲染 ---------- */
+function extractImageUrlsFromContent(content){
+    const urls = [];
+    if(!content || typeof content !== 'string') return urls;
+    // Markdown 图片 ![alt](url)
+    const mdRe = /!\[[^\]]*\]\((https?:\/\/[^\s\)]+)\)/gi;
+    let m;
+    while((m = mdRe.exec(content)) !== null){
+        if(m[1] && !urls.includes(m[1])) urls.push(m[1]);
+    }
+    // 纯文本图片直链
+    const directRe = /https?:\/\/[^\s"'<>)>]+\.(png|jpe?g|gif|webp|bmp)(\?[^"'<>\s)]*)?/gi;
+    while((m = directRe.exec(content)) !== null){
+        const u = m[0].replace(/[)"',]+$/, '');
+        if(!urls.includes(u)) urls.push(u);
+    }
+    return urls;
+}
 function renderMsg(m){
     if(m.type === 'event'){
         return `<div class="msg event"><div class="bubble"><div class="body time">${esc(m.content)} · ${timeFmt(m.time)}</div></div></div>`;
@@ -796,16 +824,12 @@ function renderMsg(m){
     const mt = m.message_type || 'text';
 
     const imgOnErr = `onerror="this.outerHTML='<span class=&quot;emoji-tok&quot;>[图片]</span>'"`;
-    if(m.image_urls && m.image_urls.length){
-        html += m.image_urls.map(u=>`<img class="rich" src="${esc(u)}" loading="lazy" referrerpolicy="no-referrer" ${imgOnErr} onclick="openViewer('${esc(u)}')">`).join('');
-    } else if(m.image_url){
-        html += `<img class="rich" src="${esc(m.image_url)}" loading="lazy" referrerpolicy="no-referrer" ${imgOnErr} onclick="openViewer('${esc(m.image_url)}')">`;
-    }
-    if(isMe){
-        const cStr = (m.content && typeof m.content === 'string') ? m.content : '';
-        if(mt==='text' && !m.image_urls && !m.image_url && /^https?:\/\/[^\s]+\.(png|jpe?g|gif|webp)(\?[^\s]*)?$/i.test(cStr.trim())){
-            html += `<img class="rich" src="${esc(cStr.trim())}" loading="lazy" referrerpolicy="no-referrer" ${imgOnErr} onclick="openViewer('${esc(cStr.trim())}')">`;
-        }
+    // 收集图片 URL：优先 API 返回的 image_urls/image_url，兜底从内容中提取
+    let imgUrls = (m.image_urls && m.image_urls.length) ? m.image_urls.slice() : [];
+    if(!imgUrls.length && m.image_url) imgUrls.push(m.image_url);
+    if(!imgUrls.length) imgUrls = extractImageUrlsFromContent(m.content);
+    if(imgUrls.length){
+        html += imgUrls.map(u=>`<img class="rich" src="${esc(u)}" loading="lazy" referrerpolicy="no-referrer" ${imgOnErr} onclick="openViewer('${esc(u)}')">`).join('');
     }
 
     if(mt==='video' || m.video_url){
@@ -827,7 +851,8 @@ function renderMsg(m){
         html += `<div class="cardx">${body}</div>`;
     }
     else if(mt==='native_md' || mt==='md'){
-        html += `<div class="mdbox">${esc(m.content||'')}</div>`;
+        const mdContent = String(m.content||'').replace(/!\[[^\]]*\]\(https?:\/\/[^\s\)]+\)/gi, '');
+        html += `<div class="mdbox">${esc(mdContent)}</div>`;
     }
     else if(m.content){
         html += renderRichText(m.content, m.emojis);
@@ -857,6 +882,10 @@ function renderMsg(m){
     }
     if (!isMe && state.current && state.current.type === 'group' && m.user_id) {
         tools.push(`<button class="mact mute" data-uid="${esc(m.user_id)}" data-chatid="${esc(state.current.id)}" title="禁言 / 解除禁言（需要机器人有管理权限）">🔇 禁言</button>`);
+    }
+    // 群聊中他人消息也可撤回（需要机器人有群管理权限）
+    if (!isMe && state.current && state.current.type === 'group' && m.message_id && state.current.id) {
+        tools.push(`<button class="mact revoke" data-msgid="${esc(m.message_id)}" data-chatid="${esc(state.current.id)}" data-chattype="${state.current.type}" title="撤回这条消息（需要机器人有管理权限）">↩ 撤回</button>`);
     }
     const toolsHtml = tools.length ? `<div class="msg-tools">${tools.join('')}</div>` : '';
 
@@ -901,6 +930,42 @@ $('msgList').addEventListener('click', async function(e) {
         } catch (err) { toast('操作失败', false); }
         return;
     }
+});
+
+// 点击机器人自己发送的气泡 → 撤回该消息
+$('msgList').addEventListener('click', async function(e) {
+    // 点击工具按钮时不触发气泡撤回
+    if (e.target.closest('.mact') || e.target.closest('.msg-tools')) return;
+    const bubble = e.target.closest('.msg.me .bubble');
+    if (!bubble) return;
+    const msgEl = bubble.closest('.msg');
+    if (!msgEl) return;
+    const msgId = msgEl.dataset.id || '';
+    if (!msgId || !state.current || !state.current.id) return;
+    if (!confirm('确定撤回这条消息吗？（需在发送后 2 分钟内）')) return;
+    try {
+        const res = await fetch(`${API}?type=revoke&appid=${encodeURIComponent(state.appid)}&chat_type=${state.current.type}&chat_id=${encodeURIComponent(state.current.id)}&msg_id=${encodeURIComponent(msgId)}`).then(r=>r.json());
+        if (res.code === 200) {
+            toast('撤回成功', true);
+            msgEl.remove();
+        } else {
+            toast(res.msg || '撤回失败', false);
+        }
+    } catch (err) { toast('撤回失败', false); }
+});
+
+// 点击消息气泡切换工具条（移动端无 hover，点击显示禁言/撤回）
+$('msgList').addEventListener('click', function(e) {
+    if (e.target.closest('.mact') || e.target.closest('.msg-tools') || e.target.closest('.ava')) return;
+    const msgEl = e.target.closest('.msg');
+    if (!msgEl) return;
+    // 自己消息点击气泡直接撤回（已有逻辑），不切换工具条
+    if (msgEl.classList.contains('me')) return;
+    const tools = msgEl.querySelector('.msg-tools');
+    if (!tools) return;
+    const wasOpen = msgEl.classList.contains('tools-open');
+    document.querySelectorAll('.msg.tools-open').forEach(m => m.classList.remove('tools-open'));
+    if (!wasOpen) msgEl.classList.add('tools-open');
 });
 
 $('msgList').addEventListener('click', function(e) {
@@ -1052,6 +1117,10 @@ $('logFileSelect').addEventListener('change', (e)=>{
     state.logName = e.target.value || '';
     resetConversation();
     loadList();
+    // 切换日期文件后，移动端自动回到会话列表（与切换机器人一致）
+    if(window.innerWidth <= 820){
+        document.getElementById('sidebar').classList.remove('hide');
+    }
 });
 
 /* ---------- 初始化 ---------- */

@@ -67,7 +67,7 @@ if (preg_match('/^(?:\/\s*)?(菜单|帮助|功能)/u', 消息)) {
                     "action" => [
                         "type" => 2,
                         "permission" => ["type" => 2],
-                        "data" => "安卓/苹果 QQ/微信 英雄名称",
+                        "data" => "安卓QQ 李白",
                         "unsupport_tips" => "当前QQ版本不支持"
                     ]
                 ]
@@ -118,6 +118,31 @@ if (preg_match('/^(?:\/\s*)?(菜单|帮助|功能)/u', 消息)) {
                         "type" => 2,
                         "permission" => ["type" => 2],
                         "data" => "请输入抖音或者B站的视频链接",
+                        "unsupport_tips" => "当前QQ版本不支持"
+                    ]
+                ]
+            ]
+        ],
+        
+[
+            "buttons" => [
+                [
+                    "id" => "btn9",
+                    "render_data" => ["label" => "📖 英雄查询", "visited_label" => "📖 英雄查询", "style" => 1],
+                    "action" => [
+                        "type" => 2,
+                        "permission" => ["type" => 2],
+                        "data" => "英雄查询 李白",
+                        "unsupport_tips" => "当前QQ版本不支持"
+                    ]
+                ],
+                [
+                    "id" => "btn10",
+                    "render_data" => ["label" => " 💬  AI对话", "visited_label" => "💬  AI对话", "style" => 1],
+                    "action" => [
+                        "type" => 2,
+                        "permission" => ["type" => 2],
+                        "data" => "糯糯，今天吃什么了？",
                         "unsupport_tips" => "当前QQ版本不支持"
                     ]
                 ]

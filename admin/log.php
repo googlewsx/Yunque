@@ -8,37 +8,40 @@ $appid = $_GET['appid'] ?? '';
 if (empty($appid)) {
     die("缺少appid参数");
 }
+$active_page = 'log';
 ?>
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>官机框架2.0 · 日志管理 - <?php echo htmlspecialchars($appid); ?></title>
+    <title>日志管理 - <?php echo htmlspecialchars($appid); ?></title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         :root {
-            --bg: #f8fafc;
+            --bg: #eef1f8;
             --card: #ffffff;
-            --border: #e9edf2;
-            --text-main: #1a2c3e;
-            --text-sub: #5e6f8d;
-            --text-muted: #8b9ab0;
-            --primary: #2c6b9e;
-            --primary-hover: #235b87;
-            --send: #2c6b9e;
-            --receive: #2c6e2c;
-            --event: #8b9ab0;
-            --danger: #c23d2e;
+            --border: #e4e9f4;
+            --text-main: #1f2437;
+            --text-sub: #6b7396;
+            --text-muted: #9aa3c0;
+            --primary: #5b6cff;
+            --brand: #5b6cff;
+            --brand2: #8f9aff;
+            --primary-hover: #4a5ae8;
+            --send: #5b6cff;
+            --receive: #2ecc71;
+            --event: #9aa3c0;
+            --danger: #ff6b6b;
             --sidebar-width: 240px;
-            --header-height: 52px;
+            --header-height: 56px;
         }
 
         body {
             background: var(--bg);
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
             color: var(--text-main);
             line-height: 1.5;
         }
@@ -58,20 +61,20 @@ if (empty($appid)) {
         .sidebar-header { padding: 20px 24px; border-bottom: 1px solid var(--border); }
         .sidebar-header h1 { font-size: 18px; font-weight: 600; color: var(--text-main); }
         .sidebar-header p { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
-        .sidebar-nav { flex: 1; padding: 16px 0; }
+        .sidebar-nav { flex: 1; padding: 14px 12px; }
         .nav-item {
             display: flex;
             align-items: center;
             gap: 12px;
-            padding: 10px 24px;
+            padding: 10px 14px; margin-bottom: 2px; border-radius: 9px;
             color: var(--text-sub);
             text-decoration: none;
             font-size: 14px;
             font-weight: 500;
             transition: all 0.15s;
         }
-        .nav-item:hover { background: #f1f5f9; color: var(--primary); }
-        .nav-item.active { background: #f1f5f9; color: var(--primary); border-left: 3px solid var(--primary); padding-left: 21px; }
+        .nav-item:hover { background: #f1f3fb; color: var(--primary); }
+        .nav-item.active { background: var(--primary-light, #eef0ff); color: var(--primary); font-weight: 600; }
         .nav-item i { width: 20px; font-size: 15px; }
         .sidebar-footer { padding: 16px 24px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-muted); }
 
@@ -100,7 +103,7 @@ if (empty($appid)) {
         .stat-card {
             background: var(--card);
             border: 1px solid var(--border);
-            border-radius: 10px;
+            border-radius: 12px; box-shadow: 0 1px 3px rgba(31,36,55,.04);
             padding: 14px 18px;
         }
         .stat-label { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
@@ -109,7 +112,7 @@ if (empty($appid)) {
         .card {
             background: var(--card);
             border: 1px solid var(--border);
-            border-radius: 10px;
+            border-radius: 12px; box-shadow: 0 1px 3px rgba(31,36,55,.04);
             overflow: hidden;
             margin-bottom: 20px;
         }
@@ -128,25 +131,27 @@ if (empty($appid)) {
         .log-select {
             width: 100%;
             max-width: 320px;
-            padding: 10px 12px;
-            border: 1px solid var(--border);
-            border-radius: 8px;
+            padding: 9px 13px;
+            border: 1.5px solid var(--border);
+            border-radius: 10px;
             font-size: 13px;
-            background: white;
+            background: #f7f8fd;
+            transition: all .15s;
         }
+        .log-select:focus { outline: none; border-color: var(--primary); background: #fff; box-shadow: 0 0 0 3px rgba(91,108,255,.1); }
         .log-actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
 
         .log-list { display: flex; flex-direction: column; gap: 12px; }
         .log-card {
             border: 1px solid var(--border);
             border-left: 4px solid var(--event);
-            border-radius: 8px;
+            border-radius: 10px;
             padding: 14px 16px;
             cursor: pointer;
             transition: all 0.15s;
-            background: white;
+            background: #fff;
         }
-        .log-card:hover { background: #fafcff; border-color: #cdd9ed; }
+        .log-card:hover { background: #f7f8fd; border-color: #c5cdf0; }
         .log-card.send { border-left-color: var(--send); }
         .log-card.receive { border-left-color: var(--receive); }
         .log-card.event { border-left-color: var(--event); }
@@ -156,18 +161,18 @@ if (empty($appid)) {
             font-size: 10px;
             padding: 2px 8px;
             border-radius: 20px;
-            background: #f1f5f9;
+            background: #f1f3fb;
         }
-        .log-badge.send { background: #eef2fc; color: var(--send); }
-        .log-badge.receive { background: #eef6ec; color: var(--receive); }
-        .log-badge.event { background: #f1f5f9; color: var(--event); }
+        .log-badge.send { background: #eef0ff; color: var(--send); }
+        .log-badge.receive { background: #e8f8ef; color: var(--receive); }
+        .log-badge.event { background: #f1f3fb; color: var(--event); }
         .log-summary { font-size: 13px; color: var(--text-sub); word-break: break-word; }
 
         .btn {
             padding: 6px 14px;
             font-size: 13px;
             font-weight: 500;
-            border-radius: 6px;
+            border-radius: 10px;
             cursor: pointer;
             border: none;
             display: inline-flex;
@@ -176,12 +181,12 @@ if (empty($appid)) {
             text-decoration: none;
             transition: all 0.15s;
         }
-        .btn-primary { background: var(--primary); color: white; }
-        .btn-primary:hover { background: var(--primary-hover); }
-        .btn-secondary { background: #f1f5f9; color: var(--text-sub); border: 1px solid var(--border); }
-        .btn-secondary:hover { background: #e9edf2; }
+        .btn-primary { background: linear-gradient(135deg, var(--primary), var(--brand2, #8f9aff)); color: #fff; box-shadow: 0 2px 8px rgba(91,108,255,.25); }
+        .btn-primary:hover { filter: brightness(.95); }
+        .btn-secondary { background: #f1f3fb; color: var(--text-sub); border: 1px solid var(--border); }
+        .btn-secondary:hover { background: #e4e9f4; }
         .btn-danger { background: var(--danger); color: white; }
-        .btn-danger:hover { background: #a83426; }
+        .btn-danger:hover { filter: brightness(.95); }
 
         .empty-state { text-align: center; padding: 48px 20px; color: var(--text-muted); }
 
@@ -189,19 +194,20 @@ if (empty($appid)) {
             display: none;
             position: fixed;
             inset: 0;
-            background: rgba(0, 0, 0, 0.4);
+            background: rgba(31,36,55,.45);
             z-index: 1000;
             align-items: center;
             justify-content: center;
             padding: 20px;
         }
         .modal-content {
-            background: white;
-            border-radius: 12px;
+            background: #fff;
+            border-radius: 16px;
             width: 100%;
             max-width: 780px;
             max-height: 85vh;
             overflow: auto;
+            box-shadow: 0 20px 60px rgba(31,36,55,.2);
         }
         .modal-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
         .modal-header h3 { font-size: 16px; font-weight: 600; }
@@ -213,9 +219,10 @@ if (empty($appid)) {
         .detail-label { width: 80px; font-size: 12px; color: var(--text-muted); font-weight: 500; }
         .detail-value { flex: 1; font-size: 13px; color: var(--text-main); word-break: break-word; }
         .raw-box {
-            background: #f1f5f9;
+            background: #1f2437;
+            color: #c8cef0;
             border: 1px solid var(--border);
-            border-radius: 8px;
+            border-radius: 10px;
             padding: 12px;
             font-family: 'SF Mono', monospace;
             font-size: 11px;
@@ -253,7 +260,7 @@ if (empty($appid)) {
             bottom: 20px;
             right: 20px;
             padding: 10px 16px;
-            border-radius: 8px;
+            border-radius: 10px;
             font-size: 13px;
             background: var(--text-main);
             color: white;
@@ -262,82 +269,14 @@ if (empty($appid)) {
             transition: transform 0.2s;
         }
         .notification.show { transform: translateX(0); }
-        .notification.success { background: #2c6e2c; }
-        .notification.error { background: #c23d2e; }
-    
-        /* FIX_SCROLL_HANDLE */
-        html, body { height: 100%; overflow: hidden !important; }
-        body { position: relative; }
-        .main-content { height: calc(100vh - 60px); overflow-y: auto !important; overflow-x: hidden !important; -webkit-overflow-scrolling: touch; }
-        .log-list { overflow-y: auto !important; overflow-x: hidden !important; }
-        .main-content::-webkit-scrollbar, .log-list::-webkit-scrollbar { width: 0 !important; height: 0 !important; display: none !important; }
-
-    .main-content{height:calc(100vh - 60px);overflow-y:auto !important;overflow-x:hidden !important;}
+        .notification.success { background: #2ecc71; }
+        .notification.error { background: #ff6b6b; }
 </style>
-    <link rel="stylesheet" href="theme-align.css">
-    <link rel="stylesheet" href="theme-pixel.css">
-
-<style id="manual-scrollbar-hide">
-/* 手动逐页写入：滚动可用但滚动条不显示 */
-html,body,*{scrollbar-width:none !important;-ms-overflow-style:none !important;}
-*::-webkit-scrollbar{width:0 !important;height:0 !important;display:none !important;background:transparent !important;}
-*::-webkit-scrollbar-thumb,*::-webkit-scrollbar-track{background:transparent !important;}
-/* 当前页常见滚动容器 */
-.messages,.menu,.log-list,.plugin-grid,.card-body,.table-responsive,textarea,#chatInput,.main-content,.container{scrollbar-width:none !important;-ms-overflow-style:none !important;}
-.messages::-webkit-scrollbar,.menu::-webkit-scrollbar,.log-list::-webkit-scrollbar,.plugin-grid::-webkit-scrollbar,.card-body::-webkit-scrollbar,.table-responsive::-webkit-scrollbar,textarea::-webkit-scrollbar,#chatInput::-webkit-scrollbar,.main-content::-webkit-scrollbar,.container::-webkit-scrollbar{width:0 !important;height:0 !important;display:none !important;}
-
-        /* FIX_SCROLL_HANDLE */
-        html, body { height: 100%; overflow: hidden !important; }
-        body { position: relative; }
-        .main-content { height: calc(100vh - 60px); overflow-y: auto !important; overflow-x: hidden !important; -webkit-overflow-scrolling: touch; }
-        .log-list { overflow-y: auto !important; overflow-x: hidden !important; }
-        .main-content::-webkit-scrollbar, .log-list::-webkit-scrollbar { width: 0 !important; height: 0 !important; display: none !important; }
-
-    .main-content{height:calc(100vh - 60px);overflow-y:auto !important;overflow-x:hidden !important;}
-</style>
-
-<style id="manual-scroll-fix2">
-/* 二次强制：禁用系统滚动浮标（全页只允许指定容器滚动） */
-html,body{height:100%;overflow:hidden !important;overscroll-behavior:none !important;-webkit-overflow-scrolling:auto !important;scrollbar-width:none !important;scrollbar-color:transparent transparent !important;
-  scrollbar-gutter:stable both-edges !important;}
-body{position:relative;min-height:100%;}
-.main-content,.messages,.menu,.log-list,.plugin-grid,.table-responsive,textarea,#chatInput{
-  touch-action:pan-y;
-  overflow:auto !important;
-  -webkit-overflow-scrolling:auto !important;
-  scrollbar-width:none !important;
-  -ms-overflow-style:none !important;
-  scrollbar-color:transparent transparent !important;
-  scrollbar-gutter:stable both-edges !important;
-}
-.main-content::-webkit-scrollbar,.container::-webkit-scrollbar,.messages::-webkit-scrollbar,.menu::-webkit-scrollbar,.log-list::-webkit-scrollbar,.plugin-grid::-webkit-scrollbar,.card-body::-webkit-scrollbar,.table-responsive::-webkit-scrollbar,textarea::-webkit-scrollbar,#chatInput::-webkit-scrollbar{width:0 !important;height:0 !important;background:transparent !important;display:none !important;}
-.main-content{height:calc(100vh - 60px);overflow-y:auto !important;overflow-x:hidden !important;}
-</style>
+    <link rel="stylesheet" href="admin-common.css">
 
 </head>
 <body>
-    <div class="mobile-header">
-        <button class="menu-toggle" id="menuToggle"><i class="fas fa-bars"></i></button>
-        <span style="font-weight:500;">官机框架2.0</span>
-        <div></div>
-    </div>
-
-    <div class="desktop-layout">
-        <aside class="sidebar" id="sidebar">
-            <div class="sidebar-header">
-                <h1>官机框架2.0</h1>
-                <p>机器人管理后台</p>
-            </div>
-            <nav class="sidebar-nav">
-                <a href="main.php" class="nav-item"><i class="fas fa-tachometer-alt"></i> 总览</a>
-                <a href="main.php" class="nav-item"><i class="fas fa-plus-circle"></i> 添加机器人</a>
-                <a href="set.php" class="nav-item"><i class="fas fa-user-cog"></i> 账号设置</a>
-                <a href="doc.php" class="nav-item"><i class="fas fa-file-alt"></i> 开发文档</a>
-                <a href="http://qwq.nki.pw/plugin/index.html" class="nav-item" target="_blank"><i class="fas fa-puzzle-piece"></i> 插件商城</a>
-            </nav>
-            <div class="sidebar-footer">保留 1.0 原有逻辑 · 简洁商务版</div>
-        </aside>
-
+<?php include '_nav.php'; ?>
         <main class="main-content">
             <div class="top-bar">
                 <div class="page-title">日志管理 · <?php echo htmlspecialchars($appid); ?></div>
@@ -366,7 +305,16 @@ body{position:relative;min-height:100%;}
                 <div class="card">
                     <div class="card-header">
                         <h2>日志内容</h2>
-                        <span id="logCount" class="stat-label">0 条记录</span>
+                        <div class="log-actions">
+                            <input type="text" id="searchInput" class="log-select" placeholder="搜索关键词..." autocomplete="off" style="max-width:240px;">
+                            <select id="typeFilter" class="log-select" style="max-width:150px;">
+                                <option value="">全部类型</option>
+                                <option value="send">发送</option>
+                                <option value="receive">接收</option>
+                                <option value="event">事件</option>
+                            </select>
+                            <span id="logCount" class="stat-label">0 条记录</span>
+                        </div>
                     </div>
                     <div class="card-body">
                         <div id="logList" class="log-list"><div class="empty-state">请选择日志文件</div></div>
@@ -406,6 +354,9 @@ body{position:relative;min-height:100%;}
         const appid = '<?php echo addslashes($appid); ?>';
         let currentLogFile = '';
         let deleteTargetFile = '';
+        let allLogs = [];
+        let searchKeyword = '';
+        let typeFilter = '';
 
         function showMsg(text, isSuccess) {
             const el = document.getElementById('notification');
@@ -440,11 +391,28 @@ body{position:relative;min-height:100%;}
                 const res = await fetch(`api/log.php?type=read&appid=${encodeURIComponent(appid)}&name=${encodeURIComponent(file)}`);
                 const data = await res.json();
                 if (data.code === 200) {
-                    renderLogs(data.list || []);
-                    document.getElementById('logCount').textContent = `${(data.list || []).length} 条记录`;
-                    document.getElementById('recordCount').textContent = (data.list || []).length;
+                    allLogs = data.list || [];
+                    renderFilteredLogs();
+                    document.getElementById('recordCount').textContent = allLogs.length;
                 } else { showEmptyState('加载失败：' + (data.msg || '')); }
             } catch (err) { showEmptyState('加载失败'); }
+        }
+
+        function renderFilteredLogs() {
+            let logs = allLogs;
+            if (typeFilter) logs = logs.filter(l => parseLog(l).typeClass === typeFilter);
+            if (searchKeyword) {
+                const kw = searchKeyword.toLowerCase();
+                logs = logs.filter(l => {
+                    const raw = String(l.raw || '').toLowerCase();
+                    const summary = String(l.summary || '').toLowerCase();
+                    return raw.includes(kw) || summary.includes(kw);
+                });
+            }
+            renderLogs(logs);
+            const total = allLogs.length;
+            const shown = logs.length;
+            document.getElementById('logCount').textContent = total === shown ? `${total} 条记录` : `${shown} / ${total} 条记录`;
         }
 
         function renderLogs(logs) {
@@ -484,10 +452,8 @@ body{position:relative;min-height:100%;}
                     'AT_MESSAGE_CREATE': ['receive', '频道 @消息', '📢'],
                     'MESSAGE_CREATE': ['receive', '子频道消息', '📢'],
                     'INTERACTION_CREATE': ['receive', '互动事件', '🔉'],
-                    'GROUP_ADD_ROBOT': ['event', '入群', '🏘️'],
-                    'GROUP_DEL_ROBOT': ['event', '退群', '🏘️'],
-                    'GROUP_MEMBER_ADD': ['event', '成员入群', '👋'],
-                    'GROUP_MEMBER_REMOVE': ['event', '成员退群', '👋'],
+                    'GROUP_MEMBER_ADD': ['event', '入群', '🏘️'],
+                    'GROUP_MEMBER_REMOVE': ['event', '退群', '🏘️'],
                     'GROUP_JOIN_REQUEST': ['event', '入群申请', '🚪'],
                     'GROUP_MSG_REJECT': ['event', '群拉黑', '🚫'],
                     'GROUP_MSG_RECEIVE': ['event', '群恢复', '✅'],
@@ -568,6 +534,14 @@ body{position:relative;min-height:100%;}
             if (currentLogFile) loadLogContent(currentLogFile);
             else showEmptyState();
         });
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            searchKeyword = e.target.value.trim();
+            renderFilteredLogs();
+        });
+        document.getElementById('typeFilter').addEventListener('change', (e) => {
+            typeFilter = e.target.value;
+            renderFilteredLogs();
+        });
         document.getElementById('refreshBtn').addEventListener('click', () => { loadFileList(); if (currentLogFile) loadLogContent(currentLogFile); });
         document.getElementById('deleteFileBtn').addEventListener('click', () => {
             if (!currentLogFile) { showMsg('请先选择日志文件', false); return; }
@@ -588,15 +562,6 @@ body{position:relative;min-height:100%;}
 
         function escapeHtml(str) { if (!str) return ''; return String(str).replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m])); }
 
-        // 移动端侧边栏
-        const menuToggle = document.getElementById('menuToggle');
-        const sidebar = document.getElementById('sidebar');
-        if (menuToggle) {
-            menuToggle.addEventListener('click', () => sidebar.classList.toggle('open'));
-            document.addEventListener('click', (e) => {
-                if (window.innerWidth <= 768 && !sidebar.contains(e.target) && !menuToggle.contains(e.target)) sidebar.classList.remove('open');
-            });
-        }
         loadFileList();
     </script>
 </body>

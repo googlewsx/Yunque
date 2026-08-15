@@ -112,69 +112,87 @@ function event($json) {
     if (!is_array($json)) {
         return "无效";
     }
-    
+
     $t = $json["t"] ?? "";
+    $d = $json["d"] ?? [];
+
+    // 提取发送者昵称（兼容多种字段）
+    $sender = '';
+    if (isset($d['author']['username'])) $sender = $d['author']['username'];
+    elseif (isset($d['member']['nick'])) $sender = $d['member']['nick'];
+    elseif (isset($d['op_member']['nick'])) $sender = $d['op_member']['nick'];
+    elseif (isset($d['op_member_openid'])) $sender = '用户' . substr($d['op_member_openid'], -6);
+    elseif (isset($d['author']['member_openid'])) $sender = '用户' . substr($d['author']['member_openid'], -6);
+    elseif (isset($d['author']['id'])) $sender = '用户' . substr($d['author']['id'], -6);
+    $senderPrefix = $sender !== '' ? "【{$sender}】" : "";
+
+    // 提取消息内容并去除 @bot 标记
+    $content = trim($d['content'] ?? '', "/ ");
+    if ($content !== '') {
+        $content = preg_replace('/<@!?[A-F0-9]+>\s*/i', '', $content);
+        $content = trim($content);
+    }
+    $contentText = $content !== '' ? $content : '(无内容)';
+    if (mb_strlen($contentText) > 80) $contentText = mb_substr($contentText, 0, 80) . '…';
+
     switch ($t) {
         // ---- 消息类 ----
         case "GROUP_AT_MESSAGE_CREATE":
-            return "群聊 @机器人消息：" . (trim($json["d"]["content"] ?? "", "/ ") ?: "(无内容)");
+            return "群聊 @机器人消息 {$senderPrefix}：" . $contentText;
         case "GROUP_MESSAGE_CREATE":
-            return "群聊消息：" . (trim($json["d"]["content"] ?? "", "/ ") ?: "(无内容)");
+            return "群聊消息 {$senderPrefix}：" . $contentText;
         case "C2C_MESSAGE_CREATE":
-            return "单聊消息：" . (trim($json["d"]["content"] ?? "", "/ ") ?: "(无内容)");
+            return "单聊消息 {$senderPrefix}：" . $contentText;
         case "DIRECT_MESSAGE_CREATE":
-            return "频道私信：" . (trim($json["d"]["content"] ?? "", "/ ") ?: "(无内容)");
+            return "频道私信 {$senderPrefix}：" . $contentText;
         case "AT_MESSAGE_CREATE":
-            return "频道 @机器人消息：" . (trim($json["d"]["content"] ?? "", "/ ") ?: "(无内容)");
+            return "频道 @机器人消息 {$senderPrefix}：" . $contentText;
         case "MESSAGE_CREATE":
-            return "子频道消息：" . (trim($json["d"]["content"] ?? "", "/ ") ?: "(无内容)");
+            return "子频道消息 {$senderPrefix}：" . $contentText;
         // ---- 消息撤回 ----
         case "MESSAGE_DELETE":
         case "PUBLIC_MESSAGE_DELETE":
-            return "频道消息撤回";
+            return "频道消息被撤回";
         case "GROUP_AT_MESSAGE_DELETE":
-            return "群聊 @消息撤回";
+            return "群聊 @消息被撤回";
         case "GROUP_MESSAGE_DELETE":
-            return "群聊消息撤回";
+            return "群聊消息被撤回";
         case "C2C_MESSAGE_DELETE":
-            return "单聊消息撤回";
+            return "单聊消息被撤回";
         case "DIRECT_MESSAGE_DELETE":
-            return "频道私信撤回";
+            return "频道私信被撤回";
         // ---- 群聊管理 ----
         case "GROUP_ADD_ROBOT":
-            return "被拉入群聊";
+            return "机器人被拉入群聊" . ($sender !== '' ? "（操作人：{$sender}）" : "");
         case "GROUP_DEL_ROBOT":
-            return "被移出群聊";
-        case "GROUP_MEMBER_ADD":
-            return "成员入群";
-        case "GROUP_MEMBER_REMOVE":
-            return "成员退群";
+            return "机器人被移出群聊" . ($sender !== '' ? "（操作人：{$sender}）" : "");
         case "GROUP_JOIN_REQUEST":
-            return "入群申请";
+            $nick = $d['op_member']['nick'] ?? '未知用户';
+            return "入群申请：{$nick} 请求加入群聊";
         case "GROUP_MSG_REJECT":
-            return "群拒绝接收机器人消息（被拉黑）";
+            return "群消息拒收：群聊已关闭机器人消息（被拉黑）";
         case "GROUP_MSG_RECEIVE":
-            return "群恢复接收机器人消息";
+            return "群消息恢复：群聊已恢复接收机器人消息";
         case "GROUP_MSG_EMOJI_UPDATE":
-            return "群消息表情表态";
+            return "群消息表情表态更新";
         case "GROUP_MSG_EMOJI_REACTION":
             return "群消息表情回应";
         case "GROUP_AUDIT":
             return "群聊消息审核结果";
         case "GROUP_AUDIT_RETRY":
-            return "群聊消息审核不通过重试";
+            return "群聊消息审核不通过，需重试";
         // ---- 单聊管理 ----
         case "FRIEND_ADD":
-            return "添加好友";
+            return "新增好友";
         case "FRIEND_DEL":
-            return "删除好友";
+            return "好友删除";
         case "C2C_MSG_REJECT":
-            return "用户拒绝接收机器人消息（被拉黑）";
+            return "单聊消息拒收：用户已关闭机器人消息（被拉黑）";
         case "C2C_MSG_RECEIVE":
-            return "用户恢复接收机器人消息";
+            return "单聊消息恢复：用户已恢复接收机器人消息";
         // ---- 互动/按钮 ----
         case "INTERACTION_CREATE":
-            $itype = $json["d"]["type"] ?? "";
+            $itype = $d["type"] ?? "";
             $map = [
                 11 => "消息按钮回调",
                 12 => "单聊快捷菜单回调",
@@ -187,7 +205,7 @@ function event($json) {
                 20 => "群授权状态变更",
             ];
             return "互动事件：" . ($map[$itype] ?? "类型{$itype}");
-        // ---- 频道管理 ----
+        // ---- 频道事件（历史日志兼容，框架不再订阅） ----
         case "GUILD_CREATE":
             return "进入频道";
         case "GUILD_UPDATE":
@@ -236,11 +254,12 @@ function event($json) {
             return "进入直播频道";
         case "LIVE_CHANNEL_MEMBER_EXIT":
             return "退出直播频道";
+        // ---- 连接事件 ----
         case "READY":
             return "WebSocket 连接就绪";
         case "RESUMED":
             return "WebSocket 连接恢复";
         default:
-            return "未知事件";
+            return "未知事件：{$t}";
     }
 }

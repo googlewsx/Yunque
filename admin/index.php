@@ -11,197 +11,78 @@ if (isset($_COOKIE['admin_token'])) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
     <title>后台登录</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            background: #f5f7fa;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            background: linear-gradient(135deg, #5b6cff 0%, #8f9aff 50%, #a8b2ff 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 24px;
         }
-
         .login-card {
             width: 100%;
-            max-width: 380px;
+            max-width: 400px;
             background: #ffffff;
-            border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
-            border: 1px solid #e9ecef;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(31,36,55,.25), 0 2px 8px rgba(31,36,55,.08);
+            overflow: hidden;
         }
-
         .login-header {
-            padding: 28px 28px 0;
-            border-bottom: 1px solid #eef2f5;
-        }
-
-        .login-header h1 {
-            font-size: 22px;
-            font-weight: 600;
-            color: #1a2634;
-            letter-spacing: -0.2px;
-            margin-bottom: 4px;
-        }
-
-        .login-header p {
-            font-size: 13px;
-            color: #6c7a8a;
-            margin-bottom: 20px;
-        }
-
-        .login-body {
-            padding: 24px 28px 32px;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        .form-group label {
-            display: block;
-            font-size: 13px;
-            font-weight: 500;
-            color: #2c3e44;
-            margin-bottom: 6px;
-        }
-
-        .form-control {
-            width: 100%;
-            padding: 10px 12px;
-            font-size: 14px;
-            border: 1px solid #dce3e9;
-            border-radius: 8px;
-            background: #ffffff;
-            transition: all 0.15s ease;
-            font-family: inherit;
-        }
-
-        .form-control:focus {
-            outline: none;
-            border-color: #2c6b9e;
-            box-shadow: 0 0 0 3px rgba(44, 107, 158, 0.08);
-        }
-
-        .form-control::placeholder {
-            color: #9aaebf;
-        }
-
-        .btn {
-            width: 100%;
-            padding: 10px 16px;
-            font-size: 14px;
-            font-weight: 500;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.15s ease;
-            font-family: inherit;
-            border: none;
-        }
-
-        .btn-primary {
-            background: #2c6b9e;
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: #235b87;
-        }
-
-        .btn-secondary {
-            background: #f0f2f5;
-            color: #4a5b6e;
-            border: 1px solid #e2e8f0;
-        }
-
-        .btn-secondary:hover {
-            background: #e6e9ef;
-        }
-
-        .btn-group {
-            display: flex;
-            gap: 12px;
-            margin-top: 28px;
-        }
-
-        .btn-group .btn {
-            width: auto;
-            flex: 1;
-        }
-
-        .message {
-            margin-top: 16px;
-            padding: 10px 12px;
-            border-radius: 8px;
-            font-size: 13px;
-            display: none;
-        }
-
-        .message.error {
-            display: block;
-            background: #fef2f0;
-            color: #c23d2e;
-            border: 1px solid #ffe0db;
-        }
-
-        .message.success {
-            display: block;
-            background: #eef6ec;
-            color: #2c6e2c;
-            border: 1px solid #d4e6d1;
-        }
-
-        .login-footer {
-            padding: 16px 28px 24px;
-            border-top: 1px solid #eef2f5;
-            font-size: 12px;
-            color: #8a99a8;
+            padding: 36px 32px 24px;
             text-align: center;
+            background: linear-gradient(135deg, #f5f6ff, #eef0ff);
         }
-    .main-content{height:calc(100vh - 60px);overflow-y:auto !important;overflow-x:hidden !important;}
-</style>
-    <link rel="stylesheet" href="theme-align.css">
-    <link rel="stylesheet" href="theme-pixel.css">
-
-<style id="manual-scrollbar-hide">
-/* 手动逐页写入：滚动可用但滚动条不显示 */
-html,body,*{scrollbar-width:none !important;-ms-overflow-style:none !important;}
-*::-webkit-scrollbar{width:0 !important;height:0 !important;display:none !important;background:transparent !important;}
-*::-webkit-scrollbar-thumb,*::-webkit-scrollbar-track{background:transparent !important;}
-/* 当前页常见滚动容器 */
-.messages,.menu,.log-list,.plugin-grid,.card-body,.table-responsive,textarea,#chatInput,.main-content,.container{scrollbar-width:none !important;-ms-overflow-style:none !important;}
-.messages::-webkit-scrollbar,.menu::-webkit-scrollbar,.log-list::-webkit-scrollbar,.plugin-grid::-webkit-scrollbar,.card-body::-webkit-scrollbar,.table-responsive::-webkit-scrollbar,textarea::-webkit-scrollbar,#chatInput::-webkit-scrollbar,.main-content::-webkit-scrollbar,.container::-webkit-scrollbar{width:0 !important;height:0 !important;display:none !important;}
-.main-content{height:calc(100vh - 60px);overflow-y:auto !important;overflow-x:hidden !important;}
-</style>
-
-<style id="manual-scroll-fix2">
-/* 二次强制：禁用系统滚动浮标（全页只允许指定容器滚动） */
-html,body{height:100%;overflow:hidden !important;overscroll-behavior:none !important;-webkit-overflow-scrolling:auto !important;scrollbar-width:none !important;scrollbar-color:transparent transparent !important;
-  scrollbar-gutter:stable both-edges !important;}
-body{position:relative;min-height:100%;}
-.main-content,.messages,.menu,.log-list,.plugin-grid,.table-responsive,textarea,#chatInput{
-  touch-action:pan-y;
-  overflow:auto !important;
-  -webkit-overflow-scrolling:auto !important;
-  scrollbar-width:none !important;
-  -ms-overflow-style:none !important;
-  scrollbar-color:transparent transparent !important;
-  scrollbar-gutter:stable both-edges !important;
-}
-.main-content::-webkit-scrollbar,.container::-webkit-scrollbar,.messages::-webkit-scrollbar,.menu::-webkit-scrollbar,.log-list::-webkit-scrollbar,.plugin-grid::-webkit-scrollbar,.card-body::-webkit-scrollbar,.table-responsive::-webkit-scrollbar,textarea::-webkit-scrollbar,#chatInput::-webkit-scrollbar{width:0 !important;height:0 !important;background:transparent !important;display:none !important;}
-.main-content{height:calc(100vh - 60px);overflow-y:auto !important;overflow-x:hidden !important;}
-</style>
+        .login-header .logo {
+            width: 56px; height: 56px;
+            margin: 0 auto 14px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #5b6cff, #8f9aff);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 26px; color: #fff;
+            box-shadow: 0 6px 18px rgba(91,108,255,.35);
+        }
+        .login-header h1 { font-size: 22px; font-weight: 700; color: #1f2437; margin-bottom: 4px; }
+        .login-header p { font-size: 13px; color: #9aa3c0; }
+        .login-body { padding: 28px 32px 24px; }
+        .form-group { margin-bottom: 18px; }
+        .form-group label { display: block; font-size: 12.5px; font-weight: 600; color: #6b7396; margin-bottom: 7px; }
+        .form-control {
+            width: 100%; padding: 11px 14px; font-size: 14px;
+            border: 1.5px solid #e4e9f4; border-radius: 12px;
+            background: #f7f8fd; transition: all 0.15s ease; font-family: inherit;
+        }
+        .form-control:focus { outline: none; border-color: #5b6cff; background: #fff; box-shadow: 0 0 0 4px rgba(91,108,255,.1); }
+        .form-control::placeholder { color: #9aa3c0; }
+        .btn {
+            width: 100%; padding: 11px 16px; font-size: 14px; font-weight: 600;
+            border-radius: 12px; cursor: pointer; transition: all 0.15s ease;
+            font-family: inherit; border: none;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #5b6cff, #8f9aff);
+            color: #fff; box-shadow: 0 4px 14px rgba(91,108,255,.35);
+        }
+        .btn-primary:hover { filter: brightness(1.05); transform: translateY(-1px); }
+        .btn-primary:active { transform: translateY(0); }
+        .btn-secondary { background: #f1f3fb; color: #6b7396; border: 1.5px solid #e4e9f4; }
+        .btn-secondary:hover { background: #e8ebf8; }
+        .btn-group { display: flex; gap: 12px; margin-top: 24px; }
+        .btn-group .btn { width: auto; flex: 1; }
+        .message { margin-top: 16px; padding: 10px 14px; border-radius: 10px; font-size: 13px; display: none; }
+        .message.error { display: block; background: #fff0f0; color: #ff6b6b; border: 1px solid #ffd9d9; }
+        .message.success { display: block; background: #e8f8ef; color: #1f9d55; border: 1px solid #c8ecd8; }
+        .login-footer { padding: 16px 32px 24px; font-size: 11.5px; color: #9aa3c0; text-align: center; }
+    </style>
 
 </head>
 <body>
     <div class="login-card">
         <div class="login-header">
+            <div class="logo"><i class="fas fa-robot"></i></div>
             <h1>QQ机器人框架</h1>
             <p>后台管理系统</p>
         </div>

@@ -9,10 +9,12 @@ $rule = '/^全局\s*(\d+)$/u';
 if (preg_match($rule, 消息, $res)) {
     $qun = $res[1];
     
-    // 固定官方链接模板
+    // 固定官方链接模板（botUin / botUid 需替换为你的机器人实际值）
+    $botUin = "你的botUin";
+    $botUid = "你的botUid";
     $link = 'https://club.vip.qq.com/transfer?open_kuikly_info=%7B%22page_name%22%3A%20%22ai_group_service_agreement_pop_page%22%2C%22groupCode%22%3A'
     .$qun.
-    '%2C%22botUin%22%3A3889206915%2C%22botUid%22%3A%22u_VtDjEo2D4a55J2_piM_eew%22%2C%22screen%22%3A1%7D';
+    '%2C%22botUin%22%3A'.$botUin.'%2C%22botUid%22%3A%22'.$botUid.'%22%2C%22screen%22%3A1%7D';
 
 
 

@@ -1,9 +1,6 @@
 <?php
 // 聊天记录API接口
 header('Content-Type: application/json');
-header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-header('Pragma: no-cache');
-header('Expires: 0');
 
 // mbstring 缺失时的兼容垫片
 if (!function_exists('mb_substr')) {
@@ -174,6 +171,26 @@ function 云雀_提取图片($attachments, $content = '') {
     }
     return $urls;
 }
+/** 从 Markdown 文本中提取图片链接 ![alt](url)，兼容带尺寸标注的写法 */
+function 云雀_提取Markdown图片($content) {
+    $urls = [];
+    if ($content === '' || $content === null) return $urls;
+    // 匹配 ![alt text](url) 以及 ![alt #width #height](url)
+    if (preg_match_all('/!\[[^\]]*\]\((https?:\/\/[^\s\)]+)\)/i', (string)$content, $matches)) {
+        foreach ($matches[1] as $u) {
+            $u = trim($u);
+            if ($u !== '' && !in_array($u, $urls, true)) $urls[] = $u;
+        }
+    }
+    // 同时提取纯文本中的图片直链（非 markdown 语法）
+    if (preg_match_all('/https?:\/\/[^\s"\'\)<>]+\.(png|jpe?g|gif|webp|bmp)([?"\'\s<>)#]|$)/i', (string)$content, $m2)) {
+        foreach ($m2[0] as $u) {
+            $u = rtrim(trim($u), '"\')#,');
+            if ($u !== '' && !in_array($u, $urls, true)) $urls[] = $u;
+        }
+    }
+    return $urls;
+}
 
 /**
  * 后台群管理操作：载入框架运行环境并定义必要常量。
@@ -313,6 +330,10 @@ switch ($type) {
                             }
                         }
                     } elseif ($eventType == "C2C_MESSAGE_CREATE") {
+                        // 机器人自己发出的私聊消息回传时 author.id 是机器人自己，无法据此确定会话方，跳过
+                        if (!empty($data["d"]["author"]["bot"])) {
+                            continue;
+                        }
                         $userId = $data["d"]["author"]["id"] ?? "";
                         if ($userId && !isset($privates[$userId])) {
                             $privates[$userId] = [
@@ -330,20 +351,14 @@ switch ($type) {
                                 $privates[$userId]["last_message"] = 消息预览($data);
                             }
                         }
-                    } elseif (in_array($eventType, ["GROUP_ADD_ROBOT", "GROUP_DEL_ROBOT", "GROUP_MEMBER_ADD", "GROUP_MEMBER_REMOVE"], true)) {
+                    } elseif ($eventType == "GROUP_ADD_ROBOT" || $eventType == "GROUP_DEL_ROBOT") {
                         $groupId = $data["d"]["group_openid"] ?? "";
                         if ($groupId && !isset($groups[$groupId])) {
-                            $eventLabels = [
-                                "GROUP_ADD_ROBOT" => "[机器人入群]",
-                                "GROUP_DEL_ROBOT" => "[机器人退群]",
-                                "GROUP_MEMBER_ADD" => "[成员入群]",
-                                "GROUP_MEMBER_REMOVE" => "[成员退群]",
-                            ];
                             $groups[$groupId] = [
                                 "id" => $groupId,
                                 "type" => "group",
                                 "last_message_time" => $time,
-                                "last_message" => $eventLabels[$eventType] ?? "[事件]",
+                                "last_message" => $eventType == "GROUP_ADD_ROBOT" ? "[加群事件]" : "[退群事件]",
                                 "message_count" => 0
                             ];
                         }
@@ -376,7 +391,8 @@ switch ($type) {
                         $sourceType = $data["source_type"] ?? "";
                         $targetId = $data["target_id"] ?? "";
                         $sendContent = is_array($data["content"] ?? null) ? json_encode($data["content"], JSON_UNESCAPED_UNICODE) : ($data["content"] ?? "");
-                        if ($sourceType == "群聊" && $targetId) {
+                        // 群聊相关 source_type：群聊、互动、成员入群等（排除私聊）
+                        if ($sourceType != "私聊" && $targetId) {
                             if (!isset($groups[$targetId])) {
                                 $groups[$targetId] = [
                                     "id" => $targetId,
@@ -510,6 +526,7 @@ switch ($type) {
         
         $content = explode("\n", $content);
         $messages = [];
+        $seenMsgIds = []; // 按 message_id 去重，避免同一机器人消息被多种日志格式重复记录
         $previousCardMessages = []; // 存储之前的卡片消息，用于查找视频/语音链接
         
         // 先遍历一遍，收集所有卡片消息的链接
@@ -582,25 +599,44 @@ switch ($type) {
                                 $userId = $data["d"]["author"]["id"] ?? "";
                                 $content = trim($data["d"]["content"] ?? "", "/ ");
                                 $messageId = $data["d"]["id"] ?? "";
-                                $rawUsername = $data["d"]["author"]["username"] ?? "";
-                                $memberNick = $data["d"]["member"]["nick"] ?? "";
-                                $username = $rawUsername ?: ($memberNick ?: ("用户" . substr($userId, -6)));
-                                
+                                $isBot = !empty($data["d"]["author"]["bot"]);
                                 // 提取图片
                                 $imageUrls = 云雀_提取图片($data["d"]["attachments"] ?? [], $content);
-                                
-                                $message = [
-                                    "time" => $time,
-                                    "type" => "user",
-                                    "user_id" => $userId,
-                                    "username" => $username,
-                                    "raw_username" => $rawUsername,
-                                    "content" => $content,
-                                    "message_id" => $messageId,
-                                    "image_urls" => $imageUrls,
-                                    "emojis" => $data["d"]["emojis"] ?? [],
-                                    "attachments" => $data["d"]["attachments"] ?? []
-                                ];
+
+                                if ($isBot) {
+                                    // 机器人自己发出的消息（平台回传，author.bot=true）
+                                    $message = [
+                                        "time" => $time,
+                                        "type" => "bot",
+                                        "content" => $content,
+                                        "message_type" => "text",
+                                        "message_id" => $messageId,
+                                        "image_url" => null,
+                                        "voice_url" => null,
+                                        "voice_url_silk" => null,
+                                        "video_url" => null,
+                                        "card_data" => null,
+                                        "image_urls" => $imageUrls,
+                                        "emojis" => $data["d"]["emojis"] ?? [],
+                                        "attachments" => $data["d"]["attachments"] ?? []
+                                    ];
+                                } else {
+                                    $rawUsername = $data["d"]["author"]["username"] ?? "";
+                                    $memberNick = $data["d"]["member"]["nick"] ?? "";
+                                    $username = $rawUsername ?: ($memberNick ?: ("用户" . substr($userId, -6)));
+                                    $message = [
+                                        "time" => $time,
+                                        "type" => "user",
+                                        "user_id" => $userId,
+                                        "username" => $username,
+                                        "raw_username" => $rawUsername,
+                                        "content" => $content,
+                                        "message_id" => $messageId,
+                                        "image_urls" => $imageUrls,
+                                        "emojis" => $data["d"]["emojis"] ?? [],
+                                        "attachments" => $data["d"]["attachments"] ?? []
+                                    ];
+                                }
                             }
                         } elseif ($eventType == "GROUP_ADD_ROBOT") {
                             $groupId = $data["d"]["group_openid"] ?? "";
@@ -626,49 +662,31 @@ switch ($type) {
                                     "content" => "退出群聊"
                                 ];
                             }
-                        } elseif ($eventType == "GROUP_MEMBER_ADD") {
-                            $groupId = $data["d"]["group_openid"] ?? "";
-                            if ($groupId == $chatId) {
-                                $memberId = $data["d"]["member_openid"] ?? "";
-                                $message = [
-                                    "time" => $time,
-                                    "type" => "event",
-                                    "event_type" => "member_join",
-                                    "operator_id" => $memberId,
-                                    "content" => "新成员入群"
-                                ];
-                            }
-                        } elseif ($eventType == "GROUP_MEMBER_REMOVE") {
-                            $groupId = $data["d"]["group_openid"] ?? "";
-                            if ($groupId == $chatId) {
-                                $memberId = $data["d"]["member_openid"] ?? "";
-                                $message = [
-                                    "time" => $time,
-                                    "type" => "event",
-                                    "event_type" => "member_leave",
-                                    "operator_id" => $memberId,
-                                    "content" => "成员退群"
-                                ];
-                            }
                         } elseif (isset($data["direction"]) && $data["direction"] === "发送") {
                             // 兼容新日志结构：发送记录（无 BOT_MESSAGE 事件）
                             $sourceType = $data["source_type"] ?? "";
                             $targetId = $data["target_id"] ?? "";
-                            if (($sourceType === "群聊" || $sourceType === "互动") && $targetId == $chatId) {
+                            // 群聊相关 source_type：群聊、互动、成员入群等（排除私聊）
+                            $isGroupSource = ($sourceType !== "私聊");
+                            if ($isGroupSource && $targetId == $chatId) {
                                 $rawType = $data["content_type"] ?? "text";
                                 $rawTypeNorm = strtolower(trim((string)$rawType));
                                 $mappedType = (strpos($rawTypeNorm, 'md') !== false || strpos((string)($data['action'] ?? ''), '原生MD') !== false) ? 'native_md' : ((strpos($rawTypeNorm, '卡') !== false) ? 'card' : 'text');
+                                $sendContent = $data["content"] ?? "";
+                                // 从内容中提取 markdown 图片和直链图片
+                                $imgUrls = 云雀_提取Markdown图片($sendContent);
                                 $message = [
                                     "time" => $time,
                                     "type" => "bot",
-                                    "content" => $data["content"] ?? "",
+                                    "content" => $sendContent,
                                     "message_type" => $mappedType,
                                     "message_id" => $data["message_id"] ?? "",
                                     "image_url" => null,
                                     "voice_url" => null,
                                     "voice_url_silk" => null,
                                     "video_url" => null,
-                                    "card_data" => null
+                                    "card_data" => null,
+                                    "image_urls" => $imgUrls
                                 ];
                             }
                         } elseif ($eventType == "BOT_MESSAGE") {
@@ -797,17 +815,21 @@ switch ($type) {
                                 $rawType = $data["content_type"] ?? "text";
                                 $rawTypeNorm = strtolower(trim((string)$rawType));
                                 $mappedType = (strpos($rawTypeNorm, 'md') !== false || strpos((string)($data['action'] ?? ''), '原生MD') !== false) ? 'native_md' : ((strpos($rawTypeNorm, '卡') !== false) ? 'card' : 'text');
+                                $sendContent = $data["content"] ?? "";
+                                // 从内容中提取 markdown 图片和直链图片
+                                $imgUrls = 云雀_提取Markdown图片($sendContent);
                                 $message = [
                                     "time" => $time,
                                     "type" => "bot",
-                                    "content" => $data["content"] ?? "",
+                                    "content" => $sendContent,
                                     "message_type" => $mappedType,
                                     "message_id" => $data["message_id"] ?? "",
                                     "image_url" => null,
                                     "voice_url" => null,
                                     "voice_url_silk" => null,
                                     "video_url" => null,
-                                    "card_data" => null
+                                    "card_data" => null,
+                                    "image_urls" => $imgUrls
                                 ];
                             }
                         } elseif ($eventType == "BOT_MESSAGE") {
@@ -879,7 +901,16 @@ switch ($type) {
                     }
                     
                     if ($message) {
-                        $messages[] = $message;
+                        // 按 message_id 去重（同一机器人消息可能同时被「发送记录」和「平台回传事件」记录）
+                        $mid = $message["message_id"] ?? "";
+                        if ($mid !== "") {
+                            if (isset($seenMsgIds[$mid])) {
+                                $message = null;
+                            } else {
+                                $seenMsgIds[$mid] = true;
+                            }
+                        }
+                        if ($message) $messages[] = $message;
                     }
                 } catch (Exception $e) {
                     continue;
@@ -1501,9 +1532,6 @@ switch ($type) {
                 } elseif ($ev === 'GROUP_ADD_ROBOT' || $ev === 'GROUP_DEL_ROBOT') {
                     $uid = $d['d']['op_member_openid'] ?? '';
                     $uname = $d['d']['op_member']['nick'] ?? '';
-                } elseif ($ev === 'GROUP_MEMBER_ADD' || $ev === 'GROUP_MEMBER_REMOVE') {
-                    $uid = $d['d']['member_openid'] ?? '';
-                    $uname = '';
                 }
                 if ($uid === '') continue;
                 if (!isset($users[$uid])) {

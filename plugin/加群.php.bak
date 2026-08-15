@@ -1,15 +1,12 @@
 <?php
-// 只处理群成员加入事件（包括所有成员，但我们将排除机器人自己）
+if (消息来源 !== "成员入群") return;
 
+$新人 = 用户;
+$群号 = 来源;
 
-if (事件类型 != "GROUP_MEMBER_ADD") {
-    return;
-}
-
-// 排除机器人自己，避免机器人加群时也触发欢迎
-if (用户 == 机器人ID) {
-    return;
-}
+// 获取新人昵称（调官方接口，失败则用@替代）
+$昵称 = 群昵称($新人, $群号);
+if (!$昵称) $昵称 = "新成员";
 
 // 获取随机欢迎语（外部API，失败则用默认）
 $randomText = curl("https://api.oddfar.com/yl/q.php?c=2004&encode=text", "GET", [], "");
@@ -20,14 +17,14 @@ if (empty($randomText)) {
 
 // 构建 Markdown 消息
 $md = "";
-$md .= "![头像 #60px #60px](" . 头像(用户) . ")<@" . 用户 . ">\n\n> ";
+$md .= "![头像 #60px #60px](" . 头像($新人) . ")<@" . $新人 . ">\n\n> ";
 $md .= $randomText . "\n\n";
-$md .= "欢迎新人<@" . 用户 . ">加入了我们!\n\n";
+$md .= "欢迎 **" . $昵称 . "** 加入了我们！\n\n";
 
-// 按钮布局（点击后触发“菜单”命令）
+// 按钮布局（点击后触发"菜单"命令）
 $rows = [[
     "buttons" => [[
-        "id" => "sign_btn_001",
+        "id" => "welcome_btn_menu",
         "render_data" => [
             "label" => "菜单",
             "visited_label" => "菜单",
@@ -43,6 +40,5 @@ $rows = [[
     ]]
 ]];
 
-// 发送欢迎消息（原生 Markdown + 按钮）
 原生按钮($md, $rows);
 return;

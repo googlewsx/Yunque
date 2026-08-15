@@ -1,13 +1,10 @@
 <?php
-// plugin/菜单.php
 if (!in_array(消息来源, ["群聊", "私聊", "互动"])) {
     return;
 }
 
-// 兼容 /菜单、菜单、帮助、功能 四种触发方式
-if (preg_match('/^(?:(?:<@[^>]+>|@\S+)\s*)?(?:\/\s*)?(菜单|帮助|功能)/u', 消息)) {
-    // 这里放你原来的菜单代码
-
+// 触发：菜单/帮助/功能（框架已自动处理开头艾特机器人）
+if (preg_match('/^(?:\/\s*)?(菜单|帮助|功能)/u', 消息)) {
     // ========== 1. 防缓存随机图片 ==========
     $randParam = "?nocache=" . time() . mt_rand(1000, 9999);
     $imageUrl = "https://api.elaina.cat/random/pc" . $randParam;
@@ -45,7 +42,7 @@ if (preg_match('/^(?:(?:<@[^>]+>|@\S+)\s*)?(?:\/\s*)?(菜单|帮助|功能)/u', 
                     "action" => [
                         "type" => 2,
                         "permission" => ["type" => 2],
-                        "data" => "群管菜单(开启全局模式后并给予管理员，发送 开启群管系统 后开启)",
+                        "data" => "群管菜单",
                         "unsupport_tips" => "当前QQ版本不支持"
                     ]
                 ]
@@ -121,6 +118,31 @@ if (preg_match('/^(?:(?:<@[^>]+>|@\S+)\s*)?(?:\/\s*)?(菜单|帮助|功能)/u', 
                         "type" => 2,
                         "permission" => ["type" => 2],
                         "data" => "请输入抖音或者B站的视频链接",
+                        "unsupport_tips" => "当前QQ版本不支持"
+                    ]
+                ]
+            ]
+        ],
+        
+[
+            "buttons" => [
+                [
+                    "id" => "btn9",
+                    "render_data" => ["label" => "📖 英雄查询", "visited_label" => "📖 英雄查询", "style" => 1],
+                    "action" => [
+                        "type" => 2,
+                        "permission" => ["type" => 2],
+                        "data" => "英雄查询 李白",
+                        "unsupport_tips" => "当前QQ版本不支持"
+                    ]
+                ],
+                [
+                    "id" => "btn10",
+                    "render_data" => ["label" => " 💬  AI对话", "visited_label" => "💬  AI对话", "style" => 1],
+                    "action" => [
+                        "type" => 2,
+                        "permission" => ["type" => 2],
+                        "data" => "糯糯，今天吃什么了？",
                         "unsupport_tips" => "当前QQ版本不支持"
                     ]
                 ]

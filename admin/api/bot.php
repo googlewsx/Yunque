@@ -4,9 +4,6 @@
  * 支持：add / del / update / list
  */
 header('Content-Type: application/json');
-header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-header('Pragma: no-cache');
-header('Expires: 0');
 
 $file = dirname(__DIR__, 2) . "/main.json";
 $main = json_decode(@file_get_contents($file), true);
@@ -30,14 +27,6 @@ function 云雀_默认设置() {
 function 云雀_环境($v) {
     $v = trim((string)$v);
     return ($v === '沙箱') ? '沙箱' : '正式';
-}
-
-function 云雀_群名缓存文件($appid) {
-    return dirname(__DIR__) . "/data/group_names_{$appid}.json";
-}
-function 云雀_读群名缓存($appid) {
-    $map = json_decode(@file_get_contents(云雀_群名缓存文件($appid)), true);
-    return is_array($map) ? $map : [];
 }
 
 switch ($type) {
@@ -150,19 +139,12 @@ switch ($type) {
                 $dirty = true;
             }
             $owner = $cfg["主人"] ?? null;
-            $ownerOut = null;
+            $ownerOut = ["name" => "", "id" => "", "qq_number" => "", "remark" => ""];
             if (is_array($owner)) {
-                if (isset($owner['id']) || isset($owner['qq_number']) || isset($owner['name'])) {
-                    $clean = array_merge(["name" => "", "id" => "", "qq_number" => "", "remark" => ""], $owner);
-                    if ($clean['id'] !== '' || $clean['qq_number'] !== '') $ownerOut = $clean;
+                if (isset($owner['id']) || isset($owner['name'])) {
+                    $ownerOut = array_merge($ownerOut, $owner);
                 } else {
-                    $clean = [];
-                    foreach (array_values($owner) as $one) {
-                        if (!is_array($one)) continue;
-                        $one = array_merge(["name" => "", "id" => "", "qq_number" => "", "remark" => ""], $one);
-                        if ($one['id'] !== '' || $one['qq_number'] !== '') $clean[] = $one;
-                    }
-                    if ($clean) $ownerOut = count($clean) === 1 ? $clean[0] : $clean;
+                    $ownerOut = array_values($owner);
                 }
             }
             $list[] = [
@@ -171,7 +153,7 @@ switch ($type) {
                 "type" => $type,
                 "qq_number" => $cfg["qq_number"] ?? "",
                 "remark" => $cfg["remark"] ?? "",
-                "settings" => array_merge(云雀_默认设置(), is_array($cfg["settings"] ?? null) ? $cfg["settings"] : []),
+                "settings" => $cfg["settings"] ?? 云雀_默认设置(),
                 "主人" => $ownerOut,
                 "plugin_count" => count($cfg["plugin"] ?? [])
             ];
@@ -210,9 +192,6 @@ switch ($type) {
                         } elseif ($ev === 'GROUP_ADD_ROBOT' || $ev === 'GROUP_DEL_ROBOT') {
                             $uid = $d['d']['op_member_openid'] ?? '';
                             $uname = $d['d']['op_member']['nick'] ?? '';
-                        } elseif ($ev === 'GROUP_MEMBER_ADD' || $ev === 'GROUP_MEMBER_REMOVE') {
-                            $uid = $d['d']['member_openid'] ?? '';
-                            $uname = '';
                         }
                         if ($uid === '') continue;
                         if (!isset($users[$uid])) {
@@ -252,7 +231,7 @@ switch ($type) {
                         $ev = $d['t'] ?? '';
                         $gid = $d['d']['group_openid'] ?? $d['d']['group_id'] ?? '';
                         if ($gid === '') continue;
-                        if (!in_array($ev, ['GROUP_AT_MESSAGE_CREATE', 'GROUP_MESSAGE_CREATE', 'GROUP_ADD_ROBOT', 'GROUP_DEL_ROBOT', 'GROUP_MEMBER_ADD', 'GROUP_MEMBER_REMOVE'], true)) continue;
+                        if (!in_array($ev, ['GROUP_AT_MESSAGE_CREATE', 'GROUP_MESSAGE_CREATE', 'GROUP_ADD_ROBOT', 'GROUP_DEL_ROBOT'], true)) continue;
                         if (!isset($groups[$gid])) {
                             $groups[$gid] = ['id' => $gid, 'last_time' => ''];
                         }
@@ -264,15 +243,34 @@ switch ($type) {
             }
         }
         $groupsList = array_values($groups);
-        $groupNameMap = 云雀_读群名缓存($appid);
-        foreach ($groupsList as $i => $g) {
-            $gid = $g['id'];
-            $groupsList[$i]['name'] = isset($groupNameMap[$gid]) ? (string)$groupNameMap[$gid] : '';
-        }
         usort($groupsList, function ($a, $b) {
             return strcmp($b['last_time'], $a['last_time']);
         });
         echo json_encode(["code" => 200, "groups" => $groupsList], JSON_UNESCAPED_UNICODE);
+        break;
+
+    case "raw":
+        // 直接读取磁盘 main.json 原始内容（用于设置页实时预览，证明文件被真实读取）
+        $appid = trim($_REQUEST["appid"] ?? "");
+        clearstatcache(true, $file);
+        if (!is_file($file)) {
+            echo json_encode(["code" => 404, "msg" => "main.json 不存在"], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        $raw = json_decode(@file_get_contents($file), true);
+        if (!is_array($raw)) {
+            echo json_encode(["code" => 500, "msg" => "main.json 解析失败"], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        $mtime = filemtime($file);
+        $out = $appid !== "" ? ($raw[$appid] ?? null) : $raw;
+        echo json_encode([
+            "code" => 200,
+            "mtime" => $mtime,
+            "mtime_fmt" => date("H:i:s", $mtime),
+            "exists" => ($appid !== "" ? isset($raw[$appid]) : true),
+            "raw" => $out
+        ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
         break;
 
     default:
