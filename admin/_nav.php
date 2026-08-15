@@ -24,7 +24,7 @@ function _nav_item($current, $key, $href, $icon, $label, $extra = '') {
     <div class="sidebar-header">
         <a class="sidebar-brand" href="main.php">
             <i class="brand-ico">✦</i>
-            <span class="brand-txt">云雀 Yunque<small class="brand-sub">机器人管理后台</small></span>
+            <span class="brand-txt">Yunque 云雀<small class="brand-sub">机器人管理后台</small></span>
         </a>
     </div>
     <nav class="sidebar-nav">
