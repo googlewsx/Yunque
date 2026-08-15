@@ -2,6 +2,12 @@
 
 基于 QQ 官方开放平台事件的 PHP 机器人框架。提供多机器人管理后台、插件系统、消息收发（文字/图片/语音/文件/视频/Markdown/按钮/卡片）、数据存储、日志与群管理能力。
 
+> 项目地址：https://github.com/googlewsx/Yunque
+> 
+> 本项目基于：
+> https://github.com/change-nx/Cucko
+> （已停止维护）
+
 ## 目录结构
 
 ```text
@@ -151,8 +157,8 @@ if (消息 == "ping") {
 | --- | --- | --- |
 | `GROUP_AT_MESSAGE_CREATE` | `群聊` | 群 @ 机器人消息 |
 | `C2C_MESSAGE_CREATE` | `私聊` | 用户私聊机器人 |
-| `GROUP_ADD_ROBOT` | `加群` | 机器人被添加到群 |
-| `GROUP_DEL_ROBOT` | `退群` | 机器人被移出群 |
+| `GROUP_MEMBER_ADD` | `加群` | 被添加到群 |
+| `GROUP_MEMBER_REMOVE` | `退群` | 被移出群 |
 | `INTERACTION_CREATE` | `互动` | 按钮等互动回调 |
 
 ---
