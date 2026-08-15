@@ -490,6 +490,17 @@ function 机器人ID($appidArg = null, $secretArg = null) {
     return 自身ID($appidArg, $secretArg);
 }
 
+/** 当前机器人自身的 QQ 号（读取 main.json 的 qq_number，未配置时回退 AppID） */
+function 机器人QQ号($appid = null) {
+    $appid = $appid ?? (defined('appid') ? appid : '');
+    if ($appid === '') return '';
+    $raw = @file_get_contents(__DIR__ . "/main.json");
+    $main = json_decode($raw, true);
+    if (!is_array($main) || !isset($main[$appid]["qq_number"])) return (string)$appid;
+    $qq = trim((string)$main[$appid]["qq_number"]);
+    return $qq !== '' ? $qq : (string)$appid;
+}
+
 /** 读取后台全局配置 */
 function 云雀配置($key = null, $默认 = null) {
     static $cfg = null;
